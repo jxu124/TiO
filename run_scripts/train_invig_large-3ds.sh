@@ -3,6 +3,7 @@
 # ==== 基本参数 ====
 num_gpus=8
 # load from .env file
+python3 -c "from g2p_en import G2p"
 ENV_FILE=$(dirname "$0")/../.env
 export $(xargs < $ENV_FILE)
 

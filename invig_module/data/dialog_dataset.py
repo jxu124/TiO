@@ -124,7 +124,7 @@ class OFADialogDataset(OFADataset):
         self.num_bins = num_bins
         self.prob_grounding = 0.5
         self.prob_question = 0.5
-        self.prob_grounding = 0.3
+        self.prob_grounding = 0.33
 
         if imagenet_default_mean_and_std:
             mean = IMAGENET_DEFAULT_MEAN
@@ -189,6 +189,8 @@ class OFADialogDataset(OFADataset):
         # item = {"id": dialogue_id, "img": path_to_img, "prompt": history, "qas": qas, "bbox": [], "cate": ""}
         item = self.dataset[index]
         uniq_id, image_path, history, qas, region_coord, obj_cate = item['id'], item['img'], item['prompt'], item['qas'], item['bbox'], item['cate']
+
+        # 1.1 选择任务
 
         # 2 history, qas 转化为 text_src, text_tgt
         prob_grounding = self.prob_grounding
