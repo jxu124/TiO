@@ -55,7 +55,7 @@ def eval_grounding_acc_v2(grounding_res, grounding_ann):
     ap_scores = {}
     for t in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]:
         ap_score = _calculate_ap_score(torch.Tensor(grounding_res), torch.Tensor(grounding_ann), t)
-        ap_scores[f"grounding_acc_iou_{t}"] = ap_score.sum().item() / len(ap_score)
+        ap_scores[f"ap_{t}"] = ap_score.sum().item() / len(ap_score)
     return ap_scores
 
 

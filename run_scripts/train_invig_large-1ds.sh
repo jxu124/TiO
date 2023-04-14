@@ -16,7 +16,7 @@ log_dir=${PATH_D_LOG}/invig_large-1ds_logs
 save_dir=${PATH_D_LOG}/invig_large-1ds_checkpoints
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
-user_dir=${PATH_D_INVIG}/invig_module
+user_dir=${PATH_D_INVIG}/ofa_invig/invig_module
 
 # ==== 环境设置(无需更改) ====
 export PYTHONPATH=$PYTHONPATH:${PATH_D_OFA}/fairseq

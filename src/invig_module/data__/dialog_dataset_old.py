@@ -14,8 +14,10 @@ import utils.transforms as T
 
 from PIL import Image, ImageFile
 
-from data import data_utils
-from data.ofa_dataset import OFADataset
+
+from ofa_module import data as ofa_module_data
+data_utils = ofa_module_data.data_utils
+OFADataset = ofa_module_data.ofa_dataset.OFADataset
 
 
 # 参数设置
@@ -34,6 +36,10 @@ warnings.filterwarnings("ignore", "(Possibly )?corrupt EXIF data", UserWarning)
 # from transformers import OFATokenizer
 # path_to_tokenckpt = "/mnt/bn/hri-lq/projects/OFA/test/eval-invig-model-large"
 # tokenizer = OFATokenizer.from_pretrained(path_to_tokenckpt, local_files_only=True, truncation_side="left")
+
+## 文字预处理函数
+## 图像预处理函数
+## prompt 
 
 
 def collate(samples, pad_idx, eos_idx):
@@ -114,7 +120,8 @@ class OFADialogDataset(OFADataset):
         patch_image_size=480,
         imagenet_default_mean_and_std=False,
         num_bins=1000,
-        max_image_size=512
+        max_image_size=512,
+        task_rank={"q": 0.33, "a": 0.33, "g": 0.33},
     ):
         super().__init__(split, dataset, bpe, src_dict, tgt_dict)
         self.dataset = dataset

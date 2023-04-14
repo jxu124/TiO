@@ -5,7 +5,8 @@ import os
 import json
 import torch
 
-from data.file_dataset import FileDataset
+from ofa_module import data as ofa_module_data
+FileDataset = ofa_module_data.file_dataset.FileDataset
 
 
 class JsonlDataset(FileDataset):

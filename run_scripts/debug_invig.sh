@@ -1,22 +1,22 @@
 #!/usr/bin/env
 
 # ==== 基本参数 ====
-num_gpus=8
+num_gpus=1
 # load from .env file
 ENV_FILE=$(dirname "$0")/../.env
 export $(xargs < $ENV_FILE)
 
 # ==== 训练数据 ====
-data=${PATH_D_DATASET}/invig_train.jsonl,${PATH_D_DATASET}/guesswhat_train.jsonl,${PATH_D_DATASET}/visdial_train.jsonl,${PATH_D_DATASET}/invig_valid.jsonl
+data="invig+0.34,guesswhat+0.33,visdial+0.33,invig+1.0"
 restore_file=${PATH_D_CHECKPOINTS}/ofa_large.pt
 selected_cols=0
 
 # ==== 日志参数 ====
-log_dir=${PATH_D_LOG}/invig_test_logs
-save_dir=${PATH_D_LOG}/invig_test_checkpoints
+log_dir=${PATH_D_LOG}/invig_debug
+save_dir=${PATH_D_LOG}/invig_debug
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
-user_dir=${PATH_D_INVIG}/invig_module
+user_dir=${PATH_D_INVIG}/ofa_invig/invig_module
 
 # ==== 环境设置(无需更改) ====
 export PYTHONPATH=$PYTHONPATH:${PATH_D_OFA}/fairseq
@@ -28,25 +28,25 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=8
+batch_size=1
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
 decoder_drop_path_rate=0.2
 dropout=0.1
 attention_dropout=0.0
-max_src_length=300
-max_tgt_length=100
+max_src_length=120
+max_tgt_length=60
 num_bins=1000
 # lr=3e-5
 # max_epoch=5
 # patch_image_size=512
 
-uses_ema="--uses-ema"
-store_ema="--store-ema"
-ema_fp32="--ema-fp32"
-ema_decay=0.9999
-ema_start_update=0
+# uses_ema="--uses-ema"
+# store_ema="--store-ema"
+# ema_fp32="--ema-fp32"
+# ema_decay=0.9999
+# ema_start_update=0
 
 subfix=`date "+%Y%m%d-%H%M"`
 
@@ -62,7 +62,6 @@ for max_epoch in 20; do
       mkdir -p $save_path
       echo "log_file "${log_file}
 
-      # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} 
       python3 ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
@@ -112,11 +111,6 @@ for max_epoch in 20; do
           --patch-image-size=${patch_image_size} \
           --fp16 \
           --fp16-scale-window=512 \
-          ${uses_ema} \
-          ${store_ema} \
-          ${ema_fp32} \
-          --ema-decay=${ema_decay} \
-          --ema-start-update=${ema_start_update} \
           --num-workers=0
     done
   done

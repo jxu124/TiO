@@ -1,14 +1,7 @@
 #!/usr/bin/env
 
 # ==== 基本参数 ====
-num_gpus=8
-# PATH_DATASET=/mnt/bn/hri-lq/datasets/ofa/dialog_data
-# PATH_PROJECT=/mnt/bn/hri-lq/projects/VLDD
-# PATH_LOG=${PATH_PROJECT}/results/logs
-# PATH_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
-# PATH_INVIG=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig
-# PATH_CHECKPOINTS=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints
-# PATH_NTLK=/mnt/bn/hri-lq/projects/VLDD/nltk_data
+num_gpus=1
 # load from .env file
 ENV_FILE=$(dirname "$0")/../.env
 export $(xargs < $ENV_FILE)
@@ -23,7 +16,7 @@ log_dir=${PATH_D_LOG}/invig_huge-3ds_logs
 save_dir=${PATH_D_LOG}/invig_huge-3ds_checkpoints
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
-user_dir=${PATH_D_INVIG}/invig_module
+user_dir=${PATH_D_INVIG}/src
 
 # ==== 环境设置(无需更改) ====
 export PYTHONPATH=$PYTHONPATH:${PATH_D_OFA}/fairseq
@@ -42,8 +35,8 @@ encoder_drop_path_rate=0.2
 decoder_drop_path_rate=0.2
 dropout=0.1
 attention_dropout=0.0
-max_src_length=300
-max_tgt_length=100
+max_src_length=256
+max_tgt_length=64
 num_bins=1000
 # lr=3e-5
 # max_epoch=5
@@ -57,7 +50,7 @@ ema_start_update=0
 
 subfix=`date "+%Y%m%d-%H%M"`
 
-for max_epoch in 20; do
+for max_epoch in 10; do
   echo "max_epoch "${max_epoch}
   for lr in 3e-5; do
     echo "lr "${lr}
@@ -69,7 +62,9 @@ for max_epoch in 20; do
       mkdir -p $save_path
       echo "log_file "${log_file}
 
-      python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
+      # python3 -m torch.distributed.launch
+      # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} 
+      python3 ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
           --bpe-dir=${bpe_dir} \
@@ -123,7 +118,7 @@ for max_epoch in 20; do
           ${ema_fp32} \
           --ema-decay=${ema_decay} \
           --ema-start-update=${ema_start_update} \
-          --num-workers=0 > ${log_file} 2>&1
+          --num-workers=4 > ${log_file} 2>&1
     done
   done
 done

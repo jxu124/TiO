@@ -1,0 +1,24 @@
+
+
+datasets:
+  - task: Question
+    task_prob: 0.3
+    datasets: 
+    - "/mnt/bn/hri-lq/datasets/hf/invig"
+    - "/mnt/bn/hri-lq/datasets/hf/guesswhat"
+    - "/mnt/bn/hri-lq/datasets/hf/visdial"
+    datasets_prob": [0.4, 0.3, 0.3]
+  - task: Answer
+    task_prob: 0.3
+    datasets: 
+    - "/mnt/bn/hri-lq/datasets/hf/invig"
+    - "/mnt/bn/hri-lq/datasets/hf/guesswhat"
+    - "/mnt/bn/hri-lq/datasets/hf/visdial"
+    datasets_prob": [0.4, 0.3, 0.3]
+  - task: Grounding
+    task_prob: 0.4
+    datasets: 
+    - "/mnt/bn/hri-lq/datasets/hf/invig"
+    - "/mnt/bn/hri-lq/datasets/hf/guesswhat"
+    - "/mnt/bn/hri-lq/datasets/hf/refcoco"
+    datasets_prob": [0.4, 0.4, 0.2]

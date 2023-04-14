@@ -38,16 +38,13 @@ def parse_dialog_en(dialog):
 
 
 # sbbox to bbox
-def sbbox_to_bbox(sbbox, w, h, num_bins=1000, return_remain=False):
+def sbbox_to_bbox(sbbox, w, h, num_bins=1000):
     res = re.match("[\ ]*<bin_([0-9]*)>[\ ]*<bin_([0-9]*)>[\ ]*<bin_([0-9]*)>[\ ]*<bin_([0-9]*)>(.*)", sbbox)
     if res is None:
         return None
     bbox = np.asarray([int(res.group(1))/num_bins, int(res.group(2))/num_bins, int(res.group(3))/num_bins, int(res.group(4))/num_bins])
     bbox = bbox * np.array([w, h, w, h])
-    if return_remain:
-        return bbox, res.group(5)
-    else:
-        return bbox
+    return bbox
 
     
 def bbox_to_sbbox(bbox, w, h, num_bins=1000):

@@ -5,19 +5,30 @@ from dataclasses import dataclass, field
 import json
 import logging
 import os
+import torch
 from typing import Optional
 from argparse import Namespace
 from tqdm import tqdm
-
-import torch
-from fairseq import metrics
-from fairseq.tasks import register_task
 from omegaconf import DictConfig
 
-from tasks.ofa_task import OFATask, OFAConfig
-from invig_module.data.dialog_dataset import OFADialogDataset
-from invig_module.data.json_dataset import JsonlDataset
+# fairseq的模块
+from fairseq import metrics
+from fairseq.tasks import register_task
 
+# ofa的模块
+from tasks.ofa_task import OFATask, OFAConfig
+
+# invig的模块
+from .dialog_dataset import OFADialogDataset
+from .common import world_info_from_env, get_processor
+
+# huggingface 的模块
+from datasets import load_dataset, concatenate_datasets, interleave_datasets, load_from_disk
+from datasets.distributed import split_dataset_by_node
+import datasets
+
+
+datasets.config.IN_MEMORY_MAX_SIZE = 128000000
 logger = logging.getLogger(__name__)
 
 
@@ -63,70 +74,48 @@ class InvigTask(OFATask):
         super().__init__(cfg, src_dict, tgt_dict)
         self.uses_ema = self.cfg.uses_ema
 
-    @classmethod
-    def setup_task(cls, cfg: DictConfig, **kwargs):
-        """Setup the task."""
-        # load dictionaries
-        src_dict = cls.load_dictionary(
-            os.path.join(cfg.bpe_dir, "dict.txt")
-        )
-        tgt_dict = cls.load_dictionary(
-            os.path.join(cfg.bpe_dir, "dict.txt")
-        )
-        src_dict.add_symbol("<mask>")
-        tgt_dict.add_symbol("<mask>")
-        for i in range(cfg.code_dict_size):
-            src_dict.add_symbol("<code_{}>".format(i))
-            tgt_dict.add_symbol("<code_{}>".format(i))
-        # quantization
-        for i in range(cfg.num_bins):
-            src_dict.add_symbol("<bin_{}>".format(i))
-            tgt_dict.add_symbol("<bin_{}>".format(i))
-        
-        logger.info("source dictionary: {} types(invig)".format(len(src_dict)))
-        logger.info("target dictionary: {} types(invig)".format(len(tgt_dict)))
-        return cls(cfg, src_dict, tgt_dict)
+        self.preprocessor = get_processor(resolution=512)
+        self.hf_dataset = {
+            "invig": load_from_disk(f"/mnt/bn/hri-lq/datasets/hf/invig"),
+            "guesswhat": load_from_disk(f"/mnt/bn/hri-lq/datasets/hf/guesswhat"),
+            "visdial": load_from_disk(f"/mnt/bn/hri-lq/datasets/hf/visdial"),
+        }
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
         paths = self.cfg.data.split(',')
         assert len(paths) > 0
+        _map = {"valid": "validation"}
+        _split = _map.get(split, split)
 
-        BASE_DIR = "/root/dialog_data"
-        BASE_DIR = "/mnt/bn/hri-lq/datasets/ofa/dialog_data"
-        # self.ds_invig     = JsonlDataset(f"{BASE_DIR}/invig_train.jsonl")
-        # self.ds_guesswhat = JsonlDataset(f"{BASE_DIR}/guesswhat_train.jsonl")
-        # self.ds_visdial   = JsonlDataset(f"{BASE_DIR}/visdial_train.jsonl")
-        # self.ds_invig_val = JsonlDataset(f"{BASE_DIR}/invig_valid.jsonl")
-        if split == 'train':
-            # file_path = paths[(epoch - 1) % (len(paths) - 1)]
-            logging.info(f"Loading {len(paths)-1} dataset(s): {paths[:-1]}")
-            ds_lst = [JsonlDataset(file_path) for file_path in paths[:-1]]
-            dataset = torch.utils.data.ConcatDataset(ds_lst)
-            dataset.get_total_row_count = lambda: sum([d.get_total_row_count() for d in dataset.datasets])
-            dataset._seek = lambda offset=0: [d._seek(offset) for d in dataset.datasets]
+        from .dialog_dataset import TaskProcessor
+
+        ds_invig     = self.hf_dataset["invig"][_split]
+        ds_guesswhat = self.hf_dataset["guesswhat"][_split]
+        ds_visdial   = self.hf_dataset["visdial"][_split]
+
+        if _split == "train":
+            ds_invig_q = TaskProcessor.setup_task(ds_invig, "question")
+            ds_invig_a = TaskProcessor.setup_task(ds_invig, "answer")
+            ds_invig_g = TaskProcessor.setup_task(ds_invig, "grounding")
+            ds_guesswhat_q = TaskProcessor.setup_task(ds_guesswhat, "question")
+            ds_guesswhat_a = TaskProcessor.setup_task(ds_guesswhat, "answer")
+            ds_guesswhat_g = TaskProcessor.setup_task(ds_guesswhat, "grounding")
+            ds_visdial_q = TaskProcessor.setup_task(ds_visdial, "question")
+            ds_visdial_a = TaskProcessor.setup_task(ds_visdial, "answer")
+            
+            use_datasets = [ds_invig_q, ds_invig_a, ds_invig_g, ds_guesswhat_q, ds_guesswhat_a, ds_guesswhat_g, ds_visdial_q, ds_visdial_a]
+            prob_datasets = [0.1, 0.1, 0.15, 0.15, 0.1, 0.2, 0.1, 0.1]
+            dataset = interleave_datasets(use_datasets, prob_datasets, seed=42, stopping_strategy="all_exhausted")
         else:
-            # 载入测试集合
-            file_path = paths[-1]
-            dataset = JsonlDataset(file_path)
+            ds_invig_g = TaskProcessor.setup_task(ds_invig, "grounding")
+            ds_guesswhat_g = TaskProcessor.setup_task(ds_guesswhat, "grounding")
+            use_datasets = [ds_invig_g, ds_guesswhat_g]
+            dataset = concatenate_datasets(use_datasets).shuffle(seed=42).shard(20, 0)
 
-        # 给出几个数据集的例子
-        # logger.info(f"Samples in dataset({split}): ")
-        # for i in range(3):
-        #     logger.info(f"{i}/{3}: {dataset[i]}")
-
-        self.datasets[split] = OFADialogDataset(
-            split,
-            dataset,
-            self.bpe,
-            self.src_dict,
-            self.tgt_dict,
-            max_src_length=self.cfg.max_src_length,
-            max_tgt_length=self.cfg.max_tgt_length,
-            patch_image_size=self.cfg.patch_image_size,
-            imagenet_default_mean_and_std=self.cfg.imagenet_default_mean_and_std,
-            num_bins=self.cfg.num_bins,
-            max_image_size=self.cfg.max_image_size
-        )
+        # hack filedataset
+        dataset.get_total_row_count = lambda: len(dataset)
+        dataset._seek = lambda offset=0: None
+        self.datasets[split] = OFADialogDataset(dataset, *self.preprocessor)
 
     def build_model(self, cfg):
         model = super().build_model(cfg)
@@ -140,17 +129,7 @@ class InvigTask(OFATask):
             self.scst_generator = self.build_generator(
                 [model], Namespace(**scst_args)
             )
-
         return model
-    
-    def build_model_loadbpe_only(self):
-        bpe_dict = {
-            "_name": "gpt2",
-            "gpt2_encoder_json": os.path.join(self.cfg.bpe_dir, "encoder.json"),
-            "gpt2_vocab_bpe": os.path.join(self.cfg.bpe_dir, "vocab.bpe")
-        }
-        bpe_dict = DictConfig(bpe_dict)
-        self.bpe = self.build_bpe(bpe_dict)
 
     def _calculate_ap_score(self, hyps, refs, thresh=0.5):
         interacts = torch.cat(
@@ -174,20 +153,19 @@ class InvigTask(OFATask):
         else:
             eval_model = model
 
-        loss, sample_size, logging_output = criterion(model, sample)
+        loss, sample_size, logging_output = criterion(eval_model, sample)
 
         model.eval()
         if self.cfg.eval_acc:
-            hyps, refs = self._inference(self.sequence_generator, sample, model)
-            hyps = hyps / (self.cfg.num_bins - 1) * self.cfg.max_image_size
-            refs = refs / (self.cfg.num_bins - 1) * self.cfg.max_image_size
-            hyps[:, ::2] /= sample['w_resize_ratios'].unsqueeze(1)
-            hyps[:, 1::2] /= sample['h_resize_ratios'].unsqueeze(1)
-            refs[:, ::2] /= sample['w_resize_ratios'].unsqueeze(1)
-            refs[:, 1::2] /= sample['h_resize_ratios'].unsqueeze(1)
+            from .common import sbbox_to_bbox
+            import numpy as np
 
-            # scores = self._calculate_ap_score(hyps, refs)
-            scores = self._calculate_ap_score(hyps, sample['region_coords'].float())
+            sbbox_gen, sbbox_gt = self._inference(self.sequence_generator, sample, model)
+            # logger.info(f"sbbox_gen: {sbbox_gen}, sbbox_gt: {sbbox_gt}")
+            bbox_gen = torch.Tensor(np.stack([sbbox_to_bbox(s) for s in sbbox_gen]))
+            bbox_gt = torch.Tensor(np.stack([sbbox_to_bbox(s) for s in sbbox_gt]))
+            # logger.info(f"bbox_gen: {bbox_gen}, bbox_gt: {bbox_gt}")
+            scores = self._calculate_ap_score(bbox_gen, bbox_gt)
             logging_output["_score_sum"] = scores.sum().item()
             logging_output["_score_cnt"] = scores.size(0)
 
@@ -206,6 +184,7 @@ class InvigTask(OFATask):
         def compute_score(meters):
             score = meters["_score_sum"].sum / meters["_score_cnt"].sum
             score = score if isinstance(score, float) else score.item()
+            # logger.info(f"score: {score}")
             return round(score, 4)
 
         if sum_logs("_score_cnt") > 0:
@@ -215,12 +194,14 @@ class InvigTask(OFATask):
 
     def _inference(self, generator, sample, model):
         gen_out = self.inference_step(generator, [model], sample)
-        hyps, refs = [], []
-        for i in range(len(gen_out)):
-            hyps.append(gen_out[i][0]["tokens"][:-1] - len(self.src_dict) + self.cfg.num_bins)
-            refs.append(sample["target"][i][:-1] - len(self.src_dict) + self.cfg.num_bins)
-        if self.cfg.eval_print_samples:
-            logger.info("example hypothesis: ", hyps[0])
-            logger.info("example reference: ", refs[0])
 
-        return torch.stack(hyps, dim=0), torch.stack(refs, dim=0)
+        tokenizer = self.preprocessor[0]
+        sbbox_gen = tokenizer.batch_decode([h[0]['tokens'] for h in gen_out], skip_special_tokens=True)
+        sbbox_gt = tokenizer.batch_decode(sample['target'], skip_special_tokens=True)
+        if self.cfg.eval_print_samples:
+            logger.info("example hypothesis: ", sbbox_gen[0])
+            logger.info("example reference(gt): ", sbbox_gt[0])
+        return sbbox_gen, sbbox_gt
+    
+    def train_step(self, sample, model, criterion, optimizer, update_num, ignore_grad=False, **extra_kwargs):
+        return super().train_step(sample, model, criterion, optimizer, update_num, ignore_grad, **extra_kwargs)
