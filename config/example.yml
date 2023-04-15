@@ -1,24 +1,41 @@
 
+train_dataset:
+  - name: "invig-q"
+    path: "/mnt/bn/hri-lq/datasets/hf/invig"
+    task: "question"
+    prob: 0.1
+  - name: "invig-a"
+    path: "/mnt/bn/hri-lq/datasets/hf/invig"
+    task: "answer"
+    prob: 0.1
+  - name: "invig-g"
+    path: "/mnt/bn/hri-lq/datasets/hf/invig"
+    task: "grounding"
+    prob: 0.15
+  - name: "guesswhat-q"
+    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat"
+    task: "question"
+    prob: 0.15
+  - name: "guesswhat-a"
+    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat"
+    task: "answer"
+    prob: 0.1
+  - name: "guesswhat-g"
+    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat"
+    task: "grounding"
+    prob: 0.2
+  - name: "visdial-q"
+    path: "/mnt/bn/hri-lq/datasets/hf/visdial"
+    task: "question"
+    prob: 0.1
+  - name: "visdial-a"
+    path: "/mnt/bn/hri-lq/datasets/hf/visdial"
+    task: "answer"
+    prob: 0.1
 
-datasets:
-  - task: Question
-    task_prob: 0.3
-    datasets: 
-    - "/mnt/bn/hri-lq/datasets/hf/invig"
-    - "/mnt/bn/hri-lq/datasets/hf/guesswhat"
-    - "/mnt/bn/hri-lq/datasets/hf/visdial"
-    datasets_prob": [0.4, 0.3, 0.3]
-  - task: Answer
-    task_prob: 0.3
-    datasets: 
-    - "/mnt/bn/hri-lq/datasets/hf/invig"
-    - "/mnt/bn/hri-lq/datasets/hf/guesswhat"
-    - "/mnt/bn/hri-lq/datasets/hf/visdial"
-    datasets_prob": [0.4, 0.3, 0.3]
-  - task: Grounding
-    task_prob: 0.4
-    datasets: 
-    - "/mnt/bn/hri-lq/datasets/hf/invig"
-    - "/mnt/bn/hri-lq/datasets/hf/guesswhat"
-    - "/mnt/bn/hri-lq/datasets/hf/refcoco"
-    datasets_prob": [0.4, 0.4, 0.2]
+valid_dataset: 
+  - name: "guesswhat-g"
+    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat"
+    task: "grounding"
+    prob: 0.2
+

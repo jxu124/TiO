@@ -17,14 +17,9 @@ import datasets
 import numpy as np
 import torch
 import base64
-import utils.transforms as T
 
 # fairseq part
 from fairseq.data import FairseqDataset
-
-# OFA module
-from data import data_utils
-from data.ofa_dataset import OFADataset
 
 # invig module
 from .common import bbox_to_sbbox, world_info_from_env
@@ -270,7 +265,6 @@ class DatasetWarper():
 
 
 # ====== ofa_fairseq 通用的 collate 函数 ======
-import transformers
 
 def collate_ofa_fairseq(batch, tokenizer, image_processor):
     """
