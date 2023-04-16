@@ -24,7 +24,6 @@ from .common import world_info_from_env, get_processor
 
 # huggingface 的模块
 from datasets import load_dataset, concatenate_datasets, interleave_datasets, load_from_disk
-from datasets.distributed import split_dataset_by_node
 import datasets
 
 

@@ -161,6 +161,33 @@ class TaskProcessor():
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         return src_text, tgt_text
+    
+    @staticmethod
+    @dataset_wrapper
+    def grounding_for_test(dialog, sbbox=None, caption=""):
+        """ 任务数据集：Grounding """
+        assert sbbox is not None
+        turn = len(dialog)
+        context = []
+        for t in range(turn):
+            if dialog[t][0] != "":
+                context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        
+        caption = caption + " " if caption else ""
+        src_candidate = [
+            f" \n#instruction: which region does the context describe? \n#context: \"{caption}{context}\"",
+            f" \n#instruction: can you provide which region the context describes? \n#context: \"{caption}{context}\"",
+        ]
+        tgt_candidate = [
+            f" region: {sbbox}",
+            f" sure. region: {sbbox}"
+        ]
+        style = 0
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return src_text, tgt_text
 
     @staticmethod
     @dataset_wrapper

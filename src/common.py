@@ -10,8 +10,7 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 
-# OFA
-from transformers import OFATokenizer
+from .ofa.tokenization_ofa import OFATokenizer
 
 
 # ========== 预定义的一些参数 ==========
@@ -25,6 +24,16 @@ Image.MAX_IMAGE_PIXELS = None
 
 # ========== 预处理函数 ==========
 # 获得 tokenizer 和 image_processor
+def get_image_processor(resolution=480, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
+    image_processor = T.Compose([
+        lambda image: image.convert("RGB"),
+        T.Resize((resolution, resolution), interpolation=T.InterpolationMode.BICUBIC),
+        T.ToTensor(),
+        T.Normalize(mean=mean, std=std)
+    ])
+    return image_processor
+
+
 def get_processor(pretrain_path="/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/hf/ofa-large", 
                   resolution=480, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
     tokenizer = OFATokenizer.from_pretrained(pretrain_path, local_files_only=True, truncation_side="right")
