@@ -19,15 +19,15 @@ from fairseq.tasks import register_task
 from tasks.ofa_task import OFATask, OFAConfig
 
 # invig的模块
-from .dialog_dataset import OFADialogDataset
-from .common import world_info_from_env, get_processor
+from .dialog_dataset import OFADataset, TaskProcessor
+from .common import get_processor
 
 # huggingface 的模块
 from datasets import load_dataset, concatenate_datasets, interleave_datasets, load_from_disk
 import datasets
 
 
-datasets.config.IN_MEMORY_MAX_SIZE = 128000000
+datasets.config.IN_MEMORY_MAX_SIZE = 1024000000
 logger = logging.getLogger(__name__)
 
 
@@ -58,10 +58,6 @@ class InvigConfig(OFAConfig):
             "help": 'generation args for Self-critical sequence training, as JSON string'
         },
     )
-    uses_ema: Optional[bool] = field(
-        default=False,
-        metadata={"help": "whether to use ema"},
-    )
     debug: Optional[bool] = field(
         default=False, metadata={"help": "debug mode"}
     )
@@ -71,14 +67,12 @@ class InvigConfig(OFAConfig):
 class InvigTask(OFATask):
     def __init__(self, cfg: InvigConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
-        self.uses_ema = self.cfg.uses_ema
 
-        self.preprocessor = get_processor(resolution=512)
-        self.hf_dataset = {
-            "invig": load_from_disk(f"/mnt/bn/hri-lq/datasets/hf/invig"),
-            "guesswhat": load_from_disk(f"/mnt/bn/hri-lq/datasets/hf/guesswhat"),
-            "visdial": load_from_disk(f"/mnt/bn/hri-lq/datasets/hf/visdial"),
-        }
+        self.processor = get_processor(resolution=512)
+        self.hf_dataset = {}
+        import yaml
+        with open('/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_4ds.yml') as f:
+            self.config = yaml.load(f, Loader=yaml.FullLoader)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
         paths = self.cfg.data.split(',')
@@ -86,35 +80,28 @@ class InvigTask(OFATask):
         _map = {"valid": "validation"}
         _split = _map.get(split, split)
 
-        from .dialog_dataset import TaskProcessor
-
-        ds_invig     = self.hf_dataset["invig"][_split]
-        ds_guesswhat = self.hf_dataset["guesswhat"][_split]
-        ds_visdial   = self.hf_dataset["visdial"][_split]
+        use_datasets, probs = [], []
+        for i in self.config[_split]:
+            name = i['name']
+            if name not in self.hf_dataset:
+                self.hf_dataset[name] = load_from_disk(i['path'])
+            use_datasets += [TaskProcessor.setup_task(self.hf_dataset[name][_split], task) for task in i['tasks']]
+            probs += i['probs']
 
         if _split == "train":
-            ds_invig_q = TaskProcessor.setup_task(ds_invig, "question")
-            ds_invig_a = TaskProcessor.setup_task(ds_invig, "answer")
-            ds_invig_g = TaskProcessor.setup_task(ds_invig, "grounding")
-            ds_guesswhat_q = TaskProcessor.setup_task(ds_guesswhat, "question")
-            ds_guesswhat_a = TaskProcessor.setup_task(ds_guesswhat, "answer")
-            ds_guesswhat_g = TaskProcessor.setup_task(ds_guesswhat, "grounding")
-            ds_visdial_q = TaskProcessor.setup_task(ds_visdial, "question")
-            ds_visdial_a = TaskProcessor.setup_task(ds_visdial, "answer")
-            
-            use_datasets = [ds_invig_q, ds_invig_a, ds_invig_g, ds_guesswhat_q, ds_guesswhat_a, ds_guesswhat_g, ds_visdial_q, ds_visdial_a]
-            prob_datasets = [0.1, 0.1, 0.15, 0.15, 0.1, 0.2, 0.1, 0.1]
-            dataset = interleave_datasets(use_datasets, prob_datasets, seed=42, stopping_strategy="all_exhausted")
+            # dataset = interleave_datasets(use_datasets, probs, seed=42, stopping_strategy="all_exhausted")
+            dataset = concatenate_datasets(use_datasets).shuffle(seed=42+epoch)
         else:
-            ds_invig_g = TaskProcessor.setup_task(ds_invig, "grounding")
-            ds_guesswhat_g = TaskProcessor.setup_task(ds_guesswhat, "grounding")
-            use_datasets = [ds_invig_g, ds_guesswhat_g]
-            dataset = concatenate_datasets(use_datasets).shuffle(seed=42).shard(20, 0)
+            dataset = concatenate_datasets(use_datasets).shuffle(seed=42+epoch).select(range(1024))
+            
+        logger.info(f"load {split} data: {len(use_datasets)} dataset(s) within {len(dataset)} samples ")
+        logger.info(f"load {split} data: {self.config[_split]}")
 
         # hack filedataset
-        dataset.get_total_row_count = lambda: len(dataset)
-        dataset._seek = lambda offset=0: None
-        self.datasets[split] = OFADialogDataset(dataset, *self.preprocessor)
+        total_row_count = len(dataset)
+        self.datasets[split] = OFADataset(dataset, self.config['path_images'], *self.processor)
+        self.datasets[split].dataset.get_total_row_count = lambda: total_row_count
+        self.datasets[split].dataset._seek = lambda offset=0: None
 
     def build_model(self, cfg):
         model = super().build_model(cfg)
@@ -145,14 +132,7 @@ class InvigTask(OFATask):
         return ((ious >= thresh) & (interacts_w > 0) & (interacts_h > 0)).float()
 
     def valid_step(self, sample, model, criterion, **extra_kwargs):
-        if self.uses_ema:
-            assert 'ema_model' in extra_kwargs and extra_kwargs['ema_model'] is not None
-        if self.uses_ema:
-            eval_model = extra_kwargs['ema_model']
-        else:
-            eval_model = model
-
-        loss, sample_size, logging_output = criterion(eval_model, sample)
+        loss, sample_size, logging_output = criterion(model, sample)
 
         model.eval()
         if self.cfg.eval_acc:
@@ -160,10 +140,8 @@ class InvigTask(OFATask):
             import numpy as np
 
             sbbox_gen, sbbox_gt = self._inference(self.sequence_generator, sample, model)
-            # logger.info(f"sbbox_gen: {sbbox_gen}, sbbox_gt: {sbbox_gt}")
             bbox_gen = torch.Tensor(np.stack([sbbox_to_bbox(s) for s in sbbox_gen]))
             bbox_gt = torch.Tensor(np.stack([sbbox_to_bbox(s) for s in sbbox_gt]))
-            # logger.info(f"bbox_gen: {bbox_gen}, bbox_gt: {bbox_gt}")
             scores = self._calculate_ap_score(bbox_gen, bbox_gt)
             logging_output["_score_sum"] = scores.sum().item()
             logging_output["_score_cnt"] = scores.size(0)
@@ -183,7 +161,6 @@ class InvigTask(OFATask):
         def compute_score(meters):
             score = meters["_score_sum"].sum / meters["_score_cnt"].sum
             score = score if isinstance(score, float) else score.item()
-            # logger.info(f"score: {score}")
             return round(score, 4)
 
         if sum_logs("_score_cnt") > 0:
@@ -194,13 +171,10 @@ class InvigTask(OFATask):
     def _inference(self, generator, sample, model):
         gen_out = self.inference_step(generator, [model], sample)
 
-        tokenizer = self.preprocessor[0]
-        sbbox_gen = tokenizer.batch_decode([h[0]['tokens'] for h in gen_out], skip_special_tokens=True)
-        sbbox_gt = tokenizer.batch_decode(sample['target'], skip_special_tokens=True)
+        tokenizer = self.processor[0]
+        sbbox_gen = tokenizer.batch_decode([h[0]['tokens'] for h in gen_out])
+        sbbox_gt = tokenizer.batch_decode(sample['target'])
         if self.cfg.eval_print_samples:
-            logger.info("example hypothesis: ", sbbox_gen[0])
-            logger.info("example reference(gt): ", sbbox_gt[0])
+            logger.info(f"example hyp(gen): {sbbox_gen[0]}")
+            logger.info(f"example ref(gt):  {sbbox_gt[0]}")
         return sbbox_gen, sbbox_gt
-    
-    def train_step(self, sample, model, criterion, optimizer, update_num, ignore_grad=False, **extra_kwargs):
-        return super().train_step(sample, model, criterion, optimizer, update_num, ignore_grad, **extra_kwargs)

@@ -66,16 +66,16 @@ tokenizer, image_processor = get_processor(resolution=512)
 
 from torch.utils.data import DataLoader
 from datasets import load_from_disk
-from src.dialog_dataset import TaskProcessor, OFADialogDataset
+from src.dialog_dataset import TaskProcessor, OFADataset
 
 tokenizer, img_processor = get_processor(resolution=512)
 
 ds_guesswhat = load_from_disk(f"/mnt/bn/hri-lq/datasets/hf/guesswhat")
 ds_train = TaskProcessor.setup_task(ds_guesswhat['train'], "grounding")
-ds_train = OFADialogDataset(ds_train, tokenizer, img_processor)
+ds_train = OFADataset(ds_train, tokenizer, img_processor)
 
 ds_valid = TaskProcessor.setup_task(ds_guesswhat['validation'], "grounding")
-ds_valid = OFADialogDataset(ds_valid, tokenizer, img_processor)
+ds_valid = OFADataset(ds_valid, tokenizer, img_processor)
 
 from torch.utils.data import DataLoader
 from transformers import get_scheduler

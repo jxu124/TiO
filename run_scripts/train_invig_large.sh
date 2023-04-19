@@ -1,7 +1,7 @@
 #!/usr/bin/env
 
 # ==== 基本参数 ====
-num_gpus=1
+num_gpus=8
 # load from .env file
 python3 -c "from g2p_en import G2p"
 ENV_FILE=$(dirname "$0")/../.env
@@ -11,12 +11,14 @@ cd /mnt/bn/hri-lq/projects/VLDD/OFA-Invig/src
 # ==== 训练数据 ====
 data="invig,invig"
 restore_file=${PATH_D_CHECKPOINTS}/ofa_large.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
+# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
+# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
 selected_cols=0
 
 # ==== 日志参数 ====
-log_dir=${PATH_D_LOG}/invig_large_grounding_logs_debug
-save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints_debug
+log_dir=${PATH_D_LOG}/invig_large_grounding_logs
+save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
 user_dir=${PATH_D_INVIG}/src
@@ -31,15 +33,15 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=2
+batch_size=14
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
 decoder_drop_path_rate=0.2
 dropout=0.1
 attention_dropout=0.0
-max_src_length=256
-max_tgt_length=64
+max_src_length=280
+max_tgt_length=80
 num_bins=1000
 # lr=3e-5
 # max_epoch=5
@@ -49,7 +51,7 @@ subfix=`date "+%Y%m%d-%H%M"`
 
 for max_epoch in 10; do
   echo "max_epoch "${max_epoch}
-  for lr in 1e-5; do
+  for lr in 3e-5; do
     echo "lr "${lr}
     for patch_image_size in 512; do
       echo "patch_image_size "${patch_image_size}
@@ -59,7 +61,8 @@ for max_epoch in 10; do
       mkdir -p $save_path
       echo "log_file "${log_file}
 
-      python3 ${PATH_D_OFA}/train.py \
+      # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
+      python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
           --bpe-dir=${bpe_dir} \
@@ -108,7 +111,10 @@ for max_epoch in 10; do
           --patch-image-size=${patch_image_size} \
           --fp16 \
           --fp16-scale-window=512 \
-          --num-workers=0
+          --eval-print-samples \
+          --num-workers=6 > ${log_file} 2>&1
+          # --memory-efficient-fp16 \
+          # --bf16 \
     done
   done
 done

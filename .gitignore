@@ -1,6 +1,6 @@
 **/__pycache__
 *.ipynb
-**/.ipny_checkpoints/**
+**/.ipynb_checkpoints/**
 **/output/**
 **/lightning_logs/**
 **/wandb/**

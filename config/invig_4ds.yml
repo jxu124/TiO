@@ -1,0 +1,33 @@
+
+train:
+  - name: "invig"
+    path: "/mnt/bn/hri-lq/datasets/hf/invig"
+    tasks: ["invig_question", "invig_answer", "invig_grounding"]
+    probs: [0.1, 0.1, 0.15]
+  - name: "guesswhat"
+    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat-success"
+    tasks: ["guesswhat_question", "guesswhat_answer", "guesswhat_grounding"]
+    probs: [0.1, 0.1, 0.15]
+  - name: "visdial"
+    path: "/mnt/bn/hri-lq/datasets/hf/visdial"
+    tasks: ["visdial_question", "visdial_answer"]
+    probs: [0.1, 0.1]
+  - name: "refcoco"
+    path: "/mnt/bn/hri-lq/datasets/hf/refcoco"
+    tasks: ["refcoco_grounding"]
+    probs: [0.1]
+
+validation: 
+  - name: "invig"
+    path: "/mnt/bn/hri-lq/datasets/hf/invig"
+    tasks: ["invig_grounding"]
+    probs: [0.5]
+  - name: "guesswhat"
+    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat-success"
+    tasks: ["guesswhat_grounding"]
+    probs: [0.5]
+
+path_images:
+  "coco/": "/mnt/bn/hri-lq/datasets/coco/"
+  "visdial/": "/mnt/bn/hri-lq/datasets/images/visdial/"
+  "openimages_v1.2/": "/mnt/bn/hri-lq/datasets/openimages_v1.2/"

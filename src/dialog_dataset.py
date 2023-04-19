@@ -9,10 +9,13 @@ import warnings
 import math
 import re
 import random
+from dataclasses import dataclass
+from typing import Optional, Any, Union, List
 
 # 3rd part
 from PIL import Image, ImageFile
 from datasets.distributed import split_dataset_by_node
+import transformers
 import datasets
 import numpy as np
 import torch
@@ -44,15 +47,27 @@ ds_gnding = AnswerDataset(ds_gnding, image_processor)
 ds_all = interleave_datasets([ds_question, ds_answer, ds_gnding], probabilities=[0.33, 0.33, 0.33], seed=42, stopping_strategy="all_exhausted")
 """
 
+@dataclass
+class LoadImage():
+    path_images: dict
+    def __call__(self, features):
+        if features.get('image_path') is not None:
+            for k, v in self.path_images.items():
+                features['image_path'] = features['image_path'].replace(k, v)
+            features['image'] = Image.open(features['image_path'])
+        return features
+
 
 class TaskProcessor():
     @staticmethod
     def setup_task(dataset, task):
-        return dataset.add_column("_task", [task] * len(dataset))
+        return dataset.add_column("__task__", [task] * len(dataset))
 
     @staticmethod
-    def auto_task(data):
-        return getattr(TaskProcessor, data['_task'])(data)
+    def auto_task(data: dict, **args):
+        if "path_images" in args:
+            data = LoadImage(path_images=args.pop('path_images'))(data)
+        return getattr(TaskProcessor, data['__task__'])(data, **args)
 
     def dataset_wrapper(gttd_func):
         @wraps(gttd_func)
@@ -164,9 +179,10 @@ class TaskProcessor():
     
     @staticmethod
     @dataset_wrapper
-    def grounding_for_test(dialog, sbbox=None, caption=""):
+    def grounding_for_guesswhat(dialog, sbbox=None, caption=""):
         """ 任务数据集：Grounding """
         assert sbbox is not None
+        # 增强部分：对话乱序、对话随机删除
         turn = len(dialog)
         context = []
         for t in range(turn):
@@ -184,14 +200,32 @@ class TaskProcessor():
             f" region: {sbbox}",
             f" sure. region: {sbbox}"
         ]
-        style = 0
+        style = 0  # random.choices([0, 1], weights=[2, 1])[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         return src_text, tgt_text
 
     @staticmethod
     @dataset_wrapper
-    def question_legency(self, dialog, sbbox=None, caption=""):
+    def grounding_for_test(dialog, sbbox=None, caption=""):
+        """ 任务数据集：Grounding """
+        assert sbbox is not None
+        turn = len(dialog)
+        context = []
+        for t in range(turn):
+            if dialog[t][0] != "":
+                context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        caption = f"{caption} " if caption else ""
+
+        src_text = f" \n#instruction: which region does the context describe? \n#context: \"{caption}{context}\"".lower()
+        tgt_text = f" region: {sbbox}".lower()
+        return src_text, tgt_text
+
+    @staticmethod
+    @dataset_wrapper
+    def question_legency(dialog, sbbox=None, caption=""):
         for _ in range(10):
             turn_left = 1 if dialog[0][0] != "" else 2  # 如果第一轮“question”为“”，那么不能把“”作为tgt_text
             turn = random.randint(min(turn_left, len(dialog)), len(dialog))  # 选一个轮数，来作为tgt_text
@@ -214,7 +248,7 @@ class TaskProcessor():
     
     @staticmethod
     @dataset_wrapper
-    def answer_legency(self, dialog, sbbox=None, caption=""):
+    def answer_legency(dialog, sbbox=None, caption=""):
         ed = len(dialog) if dialog[-1][1] != "" else max(1, len(dialog)-1)
         turn = random.randint(1, ed)
         context = []
@@ -256,122 +290,421 @@ class TaskProcessor():
         tgt_text = f"g: {sbbox}"
         return src_text, tgt_text
 
+## ====== refcoco ======
 
-# ====== old legency dataset define ======
+    @staticmethod
+    def refcoco_grounding(data):
+        """ 任务数据集：Grounding """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        bbox = data.get('bbox', None)
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        context = data['text']
+        src_candidate = [
+            f" \n#instruction: which region does the context describe? \n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" region: {sbbox}",
+        ]
+        style = 0
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return src_text, tgt_text, image
 
+## ====== visdial ======
 
-class DatasetWarper():
-    def __init__(self, dataset, task):
-        self.dataset = dataset
-        task_map = {
-            "question": TaskProcessor.question,
-            "answer": TaskProcessor.answer,
-            "grounding": TaskProcessor.grounding,
-        }
-        self.task_process = task_map[task]
-
-    def __len__(self):
-        return self.dataset.__len__()
-
-    def __getitem__(self, index):
-        data = self.dataset.__getitem__(index)
-        return self.task_process(data)
-
-        # # 处理图片
-        # image = data.get('image', None)
-        # if image is None:
-        #     image = Image.open(data['image_path'])
-        # # 处理bbox
-        # w, h = image.size
-        # bbox = data.get('bbox', None)
-        # sbbox = bbox_to_sbbox(bbox, w, h) if bbox is not None else None
-        # caption = data.get("caption", "")
-        # src_text, tgt_text = self.get_text_pair_from_dialog(data['dialog'], sbbox, caption)
+    @staticmethod
+    def visdial_question(data, weights=None):
+        """ question_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理文本
+        caption = data['caption']
+        dialog = data['dialog']
+        turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
+        context = [f"query: let's talk about this picture."]
+        for t in range(turn-1):
+            context += [f"question: {dialog[t][0]}?"]
+            context += [f"answer: {dialog[t][1]}."]
+        context = " ".join(context)
+        question = dialog[turn-1][0]
         
-        # return src_text.lower(), tgt_text.lower(), image
-
-
-# ====== ofa_fairseq 通用的 collate 函数 ======
-
-def collate_ofa_fairseq(batch, tokenizer, image_processor):
-    """
-    collate_fn for OFA.
-    完整的数据格式在OFA-fairseq中如下：
-    batch = {
-        "id": id,
-        "nsentences": len(samples),
-        "ntokens": ntokens,
-        "net_input": {
-            "src_tokens": src_tokens,
-            "src_lengths": src_lengths,
-            "patch_images": patch_images,
-            "patch_masks": patch_masks,
-            "prev_output_tokens": prev_output_tokens
-        },
-        "decoder_prompts": decoder_prompts,
-        "target": target,
-        "prefix_tokens": prefix_tokens,
-        "w_resize_ratios": w_resize_ratios,
-        "h_resize_ratios": h_resize_ratios,
-        "region_coords": region_coords
-    }
-    """
-    # data in batch: (src_text, tgt_text, image)
-    # batch = [{k: v[i] for k, v in batch.items()} for i in range(len(batch['_task']))]
-    # batch = [TaskProcessor.auto_task(data) for data in batch]
-    src_texts = [i[0] for i in batch]
-    tgt_texts = [i[1] for i in batch]
-    patch_images = torch.stack([image_processor(i[2]) for i in batch])
+        src_candidate = [
+            f" \n#instruction: ask a question. \n#caption: \"{caption}.\"\n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" {question}",
+        ]
+        if weights is None:
+            weights = [1]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and question and len(dialog) >= 2
+        return src_text, tgt_text, image
     
-    # max_length longest
-    src_inputs = tokenizer(src_texts, return_length=True, max_length=160, padding="longest", return_tensors="pt")
-    with tokenizer.as_target_tokenizer():
-        labels = tokenizer(tgt_texts, max_length=64, padding="longest", return_tensors="pt")
-    src_inputs["labels"] = labels["input_ids"]
+    @staticmethod
+    def visdial_answer(data, weights=None):
+        """ answer_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理文本
+        caption = data['caption']
+        dialog = data['dialog']
+        turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
+        context = [f"query: let's talk about this picture."]
+        for t in range(turn-1):
+            context += [f"question: {dialog[t][0]}?"]
+            context += [f"answer: {dialog[t][1]}."]
+        context = " ".join(context)
+        question = dialog[turn-1][0]
+        answer = dialog[turn-1][1]
 
-    src_tokens = src_inputs["input_ids"]
-    src_lengths = src_inputs["length"]
-    patch_masks = torch.tensor([True] * len(src_lengths))
-    prev_output_tokens = src_inputs["labels"][..., :-1]
-    target = src_inputs["labels"][..., 1:]
-    batch = {
-        "net_input": {
-            'src_tokens': src_tokens,
-            "src_lengths": src_lengths,
-            'patch_images': patch_images,
-            'patch_masks': patch_masks,
-            "prev_output_tokens": prev_output_tokens
-        },
-        "target": target,
-    }
-    # 添加其他内容
-    batch["nsentences"] = len(batch)
-    batch["ntokens"] = src_lengths.sum().item()
-    return batch
+        short_or_detail = "briefly" if len(answer) < 20 else "in detail"
+        src_candidate = [
+            f" \n#instruction: answer the question {short_or_detail}. \n#caption: \"{caption}.\"\n#context: \"{context}\"\n#question: \"{question}\"",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+        ]
+        if weights is None:
+            weights = [1]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and question and answer
+        return src_text, tgt_text, image
+
+## ====== invig ======
+
+    @staticmethod
+    def invig_question(data, weights=None):
+        """ question_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        # bbox = data.get('bbox', None)
+        # sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        turn_right = len(dialog) - 1 if "?" not in dialog[-1][0] else len(dialog)  # 消除ok, i see.
+        turn = random.randint(2, max(2, turn_right))  # 选一个轮数，来作为tgt_text
+        context = [f"query: {dialog[0][1]}"]
+        for t in range(1, turn-1):
+            context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        question = dialog[turn-1][0]
+        
+        src_candidate = [
+            f" \n#instruction: ask a question. \n#context: \"{context}\"",
+            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" {question}",
+            f" not yet. {question}"
+        ]
+        if weights is None:
+            weights = [9, 1]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and question and len(dialog) >= 2
+        return src_text, tgt_text, image
+    
+    @staticmethod
+    def invig_answer(data, weights=None):
+        """ answer_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        bbox = data.get('bbox', None)
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        turn_right = len(dialog) - 1 if "?" not in dialog[-1][0] else len(dialog)  # 消除ok, i see.
+        turn = random.randint(2, max(2, turn_right))  # 选一个轮数，来作为tgt_text
+        context = [f"query: {dialog[0][1]}"]
+        for t in range(1, turn-1):
+            context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        question = dialog[turn-1][0]
+        answer = dialog[turn-1][1]
+
+        src_candidate = [
+            f" \n#instruction: answer the question according to the region and context. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
+            f" \n#instruction: say a word about the region. \n#region: {sbbox}",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+            f" {dialog[0][1]}",
+        ]
+        if weights is None:
+            weights = [8, 2]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and question and answer
+        return src_text, tgt_text, image
+    
+    @staticmethod
+    def invig_grounding(data, weights=None, test=False):
+        """ grounding_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        bbox = data.get('bbox', None)
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        context = [f"query: {dialog[0][1]}"]
+        for t in range(1, len(dialog)):
+            context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        src_candidate = [
+            f" \n#instruction: which region does the context describe? \n#context: \"{context}\"",
+            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" region: {sbbox}",
+            f" sure. region: {sbbox}",
+        ]
+        if weights is None:
+            weights = [9, 1]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        # style = 0 if test else style
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and sbbox
+        return src_text, tgt_text, image
+    
+## ====== guesswhat ======
+    
+    @staticmethod
+    def guesswhat_question(data, weights=None):
+        """ question_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        # bbox = data.get('bbox', None)
+        # sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
+        context = [f"query: guess what i want."]
+        for t in range(turn-1):
+            context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        question = dialog[turn-1][0]
+        
+        src_candidate = [
+            f" \n#instruction: ask a question. \n#context: \"{context}\"",
+            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" {question}",
+            f" not yet. {question}"
+        ]
+        if weights is None:
+            weights = [9, 1]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and question and len(dialog) >= 1, f"{image}, {question}, {len(dialog)}"
+        return src_text, tgt_text, image
+    
+    @staticmethod
+    def guesswhat_answer(data, weights=None):
+        """ answer_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        bbox = data.get('bbox', None)
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
+        context = [f"query: guess what i want."]
+        for t in range(turn-1):
+            context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        question = dialog[turn-1][0]
+        answer = dialog[turn-1][1]
+
+        src_candidate = [
+            f" \n#instruction: answer the question with yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
+            f" \n#instruction: answer the question with a simple yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+            f" {answer}",
+        ]
+        if weights is None:
+            weights = [8, 2]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and question and answer
+        return src_text, tgt_text, image
+    
+    @staticmethod
+    def guesswhat_grounding(data, weights=None):
+        """ grounding_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        bbox = data.get('bbox', None)
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        context = [f"query: guess what i want."]
+        for t in range(0, len(dialog)):
+            context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        src_candidate = [
+            f" \n#instruction: which region does the context describe? \n#context: \"{context}\"",
+            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" region: {sbbox}",
+            f" sure. region: {sbbox}",
+        ]
+        if weights is None:
+            weights = [9, 1]
+        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and sbbox
+        return src_text, tgt_text, image
+
+## ====== ofa tasks ======
+
+    @staticmethod
+    def invig_grounding_ofa(data, weights=None):
+        """ grounding_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        bbox = data.get('bbox', None)
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        context = [f"query: {dialog[0][1]}"]
+        for t in range(1, len(dialog)):
+            context += [f"question: {dialog[t][0]}"]
+            context += [f"answer: {dialog[t][1]}"]
+        context = " ".join(context)
+        src_candidate = [
+            f" which region does the text \" {context} \" describe?",
+        ]
+        tgt_candidate = [
+            f" {sbbox}",
+        ]
+        style = 0
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and sbbox
+        return src_text, tgt_text, image
+
+    @staticmethod
+    def guesswhat_answer_oracle(data, weights=None):
+        """ answer_invig """
+        # 处理图片
+        image = data.get('image', None)
+        # 处理bbox
+        bbox = data.get('bbox', None)
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        dialog = data['dialog']
+        turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
+        context = f"query: guess what i want."
+        question = dialog[turn-1][0]
+        answer = dialog[turn-1][1]
+
+        src_candidate = [
+            f" \n#instruction: answer the question with yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+        ]
+        style = 0
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        assert image and question and answer
+        return src_text, tgt_text, image
+
+## ====== end of TaskProcess ======
 
 
-class OFADialogDataset(FairseqDataset):
-    def __init__(self, dataset, tokenizer, image_processor):
+@dataclass
+class DataCollatorForOFA(transformers.DataCollatorForSeq2Seq):
+    tokenizer: transformers.PreTrainedTokenizer
+    image_processor: Optional[Any] = None
+    padding: Optional[str] = "longest"
+    max_src_length: Optional[int] = 256
+    max_tgt_length: Optional[int] = 64
+    return_tensors: Optional[str] = "pt"
+    
+    def __call__(self, features, return_tensors=None):
+        src_texts = [f[0] for f in features]
+        tgt_texts = [f[1] for f in features]
+        patch_images = torch.stack([self.image_processor(f[2]) for f in features])
+        
+        # max_length longest
+        inputs = self.tokenizer(text=src_texts, return_length=True, max_length=self.max_src_length, 
+                                padding=self.padding, truncation=True, return_tensors=self.return_tensors)
+        with self.tokenizer.as_target_tokenizer():
+            labels = self.tokenizer(text=tgt_texts, max_length=self.max_tgt_length, 
+                                    padding=self.padding, truncation=True, return_tensors=self.return_tensors)
+        # labels = self.tokenizer(text_target=tgt_texts, max_length=self.max_tgt_length, 
+        #                         padding=self.padding, truncation=True, return_tensors=self.return_tensors)
+        patch_masks = torch.tensor([True] * len(patch_images))
+        prev_output_tokens = labels.input_ids[..., :-1]
+        target = labels.input_ids[..., 1:]
+        features = {
+            "net_input": {
+                'src_tokens': inputs.input_ids,
+                "src_lengths": inputs.length,
+                'patch_images': patch_images,
+                'patch_masks': patch_masks,
+                "prev_output_tokens": prev_output_tokens
+            },
+            "target": target,
+            # 仅fairseq训练需要
+            "nsentences": len(inputs.length),
+            "ntokens": inputs.length.sum().item()
+        }
+        return features
+
+
+class OFADataset(FairseqDataset, torch.utils.data.Dataset):  # ~OFADataset
+    def __init__(self, dataset, path_images: dict, tokenizer=None, image_processor=None, **args):
         # 分布式适配
-        local_rank, rank, world_size = world_info_from_env()
-        raw_dataset = dataset
-        dataset = split_dataset_by_node(raw_dataset, rank=rank, world_size=world_size)
-        # 适配filedataset.py
-        dataset.get_total_row_count = lambda: len(raw_dataset)
-        dataset._seek = lambda offset=0: None
-        self.dataset = dataset
+        _, rank, world_size = world_info_from_env()
+        self.dataset = split_dataset_by_node(dataset, rank=rank, world_size=world_size)
+        # self.dataset.set_transform()
+        self.path_images = path_images
         self.tokenizer, self.image_processor = tokenizer, image_processor
+        self.args = args
         
     def __getitem__(self, index):
         data = self.dataset.__getitem__(index)
         if type(index) is tuple:
-            raise NotImplemented
+            raise NotImplementedError
         else:
-            data = TaskProcessor.auto_task(data)
+            data = TaskProcessor.auto_task(data, path_images=self.path_images, **self.args)
         return data
     
     def __len__(self):
         return len(self.dataset)
 
     def collater(self, samples, pad_to_length=None):
-        return collate_ofa_fairseq(samples, self.tokenizer, self.image_processor)
+        collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
+        return collate_fn(samples)
