@@ -705,6 +705,10 @@ class OFADataset(FairseqDataset, torch.utils.data.Dataset):  # ~OFADataset
     def __len__(self):
         return len(self.dataset)
 
+    def set_epoch(self, epoch):
+        super().set_epoch(epoch)
+        self.dataset.shuffle(seed=42+epoch)
+
     def collater(self, samples, pad_to_length=None):
         collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
         return collate_fn(samples)

@@ -212,7 +212,7 @@ class OFAModelWarper(torch.nn.Module):
             with torch.no_grad():
                 hypos = task.inference_step(generator, [model], sample)
         hypos = [hypos[i][0]["tokens"] for i in range(len(hypos))]
-        return self.tokenizer.batch_decode(hypos)
+        return self.tokenizer.batch_decode(hypos, skip_special_tokens=True)
 
     def generate(self, src_texts: List[str], images: List[Any], dtype=torch.float16, device='cuda'):
         src_inputs = self.tokenizer(src_texts, return_length=True, padding=True, return_tensors="pt")
