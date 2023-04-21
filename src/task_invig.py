@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import torch
+import yaml
 from typing import Optional
 from argparse import Namespace
 from tqdm import tqdm
@@ -19,11 +20,11 @@ from fairseq.tasks import register_task
 from tasks.ofa_task import OFATask, OFAConfig
 
 # invig的模块
-from .dialog_dataset import OFADataset, TaskProcessor
-from .common import get_processor
+from .dialog_dataset import MapFunc, DataCollatorForOFA, GenSampler
+from .common import get_processor, world_info_from_env
 
 # huggingface 的模块
-from datasets import load_dataset, concatenate_datasets, interleave_datasets, load_from_disk
+from datasets import load_dataset, load_from_disk
 import datasets
 
 
@@ -63,45 +64,89 @@ class InvigConfig(OFAConfig):
     )
 
 
+# hack fairseq
+from datasets import load_from_disk, Features, Value
+from fairseq.data import FairseqDataset
+        
+        
+class OFADataset(FairseqDataset):  # ~OFADataset
+    def __init__(self, sampler, tokenizer=None, image_processor=None, total_count=20_000):
+        # 分布式适配
+        self.sampler = sampler
+        self.tokenizer, self.image_processor = tokenizer, image_processor
+
+        self.it = None
+        self.worker_info = None
+
+        self.total_count = total_count
+        self.dataset = Namespace(**{'get_total_row_count': lambda: self.total_count, "_seek": lambda offset=0: None})
+
+    def init_worker(self):
+        self.worker_info = torch.utils.data.get_worker_info()
+        self.it = self.sampler()
+
+    def __getitem__(self, index):
+        try:
+            assert self.worker_info is not None
+            data = next(self.it)
+        except (StopIteration, TypeError, AssertionError):
+            self.init_worker()
+            data = next(self.it)
+        return data
+    
+    def __len__(self):
+        return self.total_count
+
+    def set_epoch(self, epoch):
+        super().set_epoch(epoch)
+        for ds in self.sampler.generators:
+            ds.set_epoch(epoch)
+
+    def collater(self, samples, pad_to_length=None):
+        collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
+        return collate_fn(samples)
+
+
 @register_task("invig", dataclass=InvigConfig)
 class InvigTask(OFATask):
     def __init__(self, cfg: InvigConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
 
         self.processor = get_processor(resolution=512)
-        self.hf_dataset = {}
-        import yaml
         with open('/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_4ds.yml') as f:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
-        paths = self.cfg.data.split(',')
-        assert len(paths) > 0
-        _map = {"valid": "validation"}
-        _split = _map.get(split, split)
+        # paths = self.cfg.data.split(',')
+        # assert len(paths) > 0
+        _split = "validation" if split == "valid" else split
 
-        use_datasets, probs = [], []
+        # 1 按照node切分数据集
+        datasets_collection = []
+        _, rank, world_size = world_info_from_env()
         for i in self.config[_split]:
             name = i['name']
-            if name not in self.hf_dataset:
-                self.hf_dataset[name] = load_from_disk(i['path'])
-            use_datasets += [TaskProcessor.setup_task(self.hf_dataset[name][_split], task) for task in i['tasks']]
-            probs += i['probs']
+            ds = load_from_disk(i['path'])[_split]
+            ds = datasets.distributed.split_dataset_by_node(ds, rank=rank, world_size=world_size).to_iterable_dataset(48)
+            for task, prob in zip(i['tasks'], i['probs']):
+                ds_task = ds.filter(MapFunc.filter_exclude_test_images).map(MapFunc.map_read_images)\
+                       .map(getattr(MapFunc, task)).select_columns(['src_text', 'tgt_text', 'image'])\
+                       .cast(Features({'src_text': Value("string"), 'tgt_text': Value("string"), 'image': datasets.Image()})).shuffle()
+                datasets_collection += [(name, ds_task, task, prob)]
 
-        if _split == "train":
-            # dataset = interleave_datasets(use_datasets, probs, seed=42, stopping_strategy="all_exhausted")
-            dataset = concatenate_datasets(use_datasets).shuffle(seed=42+epoch)
-        else:
-            dataset = concatenate_datasets(use_datasets).shuffle(seed=42+epoch).select(range(1024))
-            
-        logger.info(f"load {split} data: {len(use_datasets)} dataset(s) within {len(dataset)} samples ")
-        logger.info(f"load {split} data: {self.config[_split]}")
+        # 2 按照比例组合数据
+        use_datasets = [i[1] for i in datasets_collection]
+        probs = [i[3] for i in datasets_collection]
+        sampler = GenSampler(generators=use_datasets, weights=probs)
 
-        # hack filedataset
-        total_row_count = len(dataset)
-        self.datasets[split] = OFADataset(dataset, self.config['path_images'], *self.processor)
-        self.datasets[split].dataset.get_total_row_count = lambda: total_row_count
-        self.datasets[split].dataset._seek = lambda offset=0: None
+        # 3 构造fairseq_dataset，送进去预处理函数
+        total_count = 300_000 if split == 'train' else 1000
+        dataset = OFADataset(sampler, *self.processor, total_count=total_count)
+        self.datasets[split] = dataset
+
+        # 4 打印logs
+        logger.info(f"load {split} data: {len(use_datasets)} ({total_count}) dataset(s) *** {[i[2] for i in datasets_collection]}")
+        # logger.info(f"load {split} data: {log_tasks}, n_shards={dataset.n_shards}")
 
     def build_model(self, cfg):
         model = super().build_model(cfg)

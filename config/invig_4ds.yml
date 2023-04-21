@@ -1,31 +1,35 @@
 
 train:
-  - name: "invig"
+  - name: "invig"  # 17652
     path: "/mnt/bn/hri-lq/datasets/hf/invig"
     tasks: ["invig_question", "invig_answer", "invig_grounding"]
-    probs: [0.1, 0.1, 0.15]
-  - name: "guesswhat"
+    probs: [0.1, 0.1, 0.1]  # 0.03
+  - name: "guesswhat"  # 71165
     path: "/mnt/bn/hri-lq/datasets/hf/guesswhat-success"
     tasks: ["guesswhat_question", "guesswhat_answer", "guesswhat_grounding"]
-    probs: [0.1, 0.1, 0.15]
-  - name: "visdial"
+    probs: [0.1, 0.1, 0.2]  # 0.136
+  - name: "visdial"  # 106061
     path: "/mnt/bn/hri-lq/datasets/hf/visdial"
     tasks: ["visdial_question", "visdial_answer"]
-    probs: [0.1, 0.1]
-  - name: "refcoco"
+    probs: [0.1, 0.1]  # 0.2
+  - name: "refcoco"  # 42404
     path: "/mnt/bn/hri-lq/datasets/hf/refcoco"
     tasks: ["refcoco_grounding"]
-    probs: [0.1]
+    probs: [0.1]  # 0.08
 
 validation: 
   - name: "invig"
     path: "/mnt/bn/hri-lq/datasets/hf/invig"
     tasks: ["invig_grounding"]
-    probs: [0.5]
+    probs: [0.4]
   - name: "guesswhat"
     path: "/mnt/bn/hri-lq/datasets/hf/guesswhat-success"
     tasks: ["guesswhat_grounding"]
     probs: [0.5]
+  - name: "refcoco"
+    path: "/mnt/bn/hri-lq/datasets/hf/refcoco"
+    tasks: ["refcoco_grounding"]
+    probs: [0.1]
 
 path_images:
   "coco/": "/mnt/bn/hri-lq/datasets/coco/"
