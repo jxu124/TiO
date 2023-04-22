@@ -113,7 +113,7 @@ for max_epoch in 10; do
           --fp16 \
           --fp16-scale-window=512 \
           --eval-print-samples \
-          --num-workers=6 > ${log_file} 2>&1
+          --num-workers=4 > ${log_file} 2>&1
           # --memory-efficient-fp16 \
           # --bf16 \
     done

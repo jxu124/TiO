@@ -4,6 +4,7 @@
 # builtin part
 from io import BytesIO
 from functools import wraps
+from collections import Counter
 import logging
 import warnings
 import math
@@ -12,11 +13,11 @@ import random
 from dataclasses import dataclass
 from typing import Optional, Any, Union, List
 import json
+import os
 import yaml
 
 # 3rd part
 from PIL import Image, ImageFile
-from datasets.distributed import split_dataset_by_node
 import transformers
 import datasets
 import numpy as np
@@ -59,14 +60,23 @@ class MapFunc():
 
     @staticmethod
     def filter_exclude_test_images(features):
-        return features['image_path'] not in MapFunc.test_images
+        return features['global_image_id'] not in MapFunc.test_images
     
     @staticmethod
     def map_read_images(features):
-        if features.get('image_path') is not None:
-            for k, v in MapFunc.config['path_images'].items():
-                features['image_path'] = features['image_path'].replace(k, v)
-            features['image'] = Image.open(features['image_path'])
+        if features.get('image') is None:
+            ds, image_id = features['global_image_id'].split('.')
+            image_dir = MapFunc.config['path_images'][ds]
+            if ds == "coco":
+                if os.path.exists(f"{image_dir}/train2014/COCO_train2014_{int(image_id):012d}.jpg"):
+                    image_path = f"{image_dir}/train2014/COCO_train2014_{int(image_id):012d}.jpg"
+                elif os.path.exists(f"{image_dir}/val2014/COCO_val2014_{int(image_id):012d}.jpg"):
+                    image_path = f"{image_dir}/val2014/COCO_val2014_{int(image_id):012d}.jpg"
+            elif ds == "visdial":
+                image_path = features.get('image_path').replace('visdial', image_dir, 1)
+            elif ds == "openimages":
+                image_path = features.get('image_path').replace('openimages_v1.2', image_dir, 1)
+            features['image'] = Image.open(image_path)
         return features
 
 ## ====== refcoco ======
@@ -431,6 +441,52 @@ class MapFunc():
         assert image and question and answer
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
 
+## ====== objects365 ======
+
+    @staticmethod
+    def objects365_grounding(features, style=None):
+        """ 任务数据集：Grounding """
+        known_cates = set(['Person', 'Sneakers', 'Chair', 'Other Shoes', 'Hat', 'Car', 'Lamp', 'Glasses', 'Bottle', 'Desk', 'Cup', 'Street Lights', 'Cabinet/shelf', 'Handbag/Satchel', 'Bracelet', 'Plate', 'Picture/Frame', 'Helmet', 'Book', 'Gloves', 'Storage box', 'Boat', 'Leather Shoes', 'Flower', 'Bench', 'Potted Plant', 'Bowl/Basin', 'Flag', 'Pillow', 'Boots', 'Vase', 'Microphone', 'Necklace', 'Ring', 'SUV', 'Wine Glass', 'Belt', 'Moniter/TV', 'Backpack', 'Umbrella', 'Traffic Light', 'Speaker', 'Watch', 'Tie', 'Trash bin Can', 'Slippers', 'Bicycle', 'Stool', 'Barrel/bucket', 'Van', 'Couch', 'Sandals', 'Bakset', 'Drum', 'Pen/Pencil', 'Bus', 'Wild Bird', 'High Heels', 'Motorcycle', 'Guitar', 'Carpet', 'Cell Phone', 'Bread', 'Camera', 'Canned', 'Truck', 'Traffic cone', 'Cymbal', 'Lifesaver', 'Towel', 'Stuffed Toy', 'Candle', 'Sailboat', 'Laptop', 'Awning', 'Bed', 'Faucet', 'Tent', 'Horse', 'Mirror', 'Power outlet', 'Sink', 'Apple', 'Air Conditioner', 'Knife', 'Hockey Stick', 'Paddle', 'Pickup Truck', 'Fork', 'Traffic Sign', 'Ballon', 'Tripod', 'Dog', 'Spoon', 'Clock', 'Pot', 'Cow', 'Cake', 'Dinning Table', 'Sheep', 'Hanger', 'Blackboard/Whiteboard', 'Napkin', 'Other Fish', 'Orange/Tangerine', 'Toiletry', 'Keyboard', 'Tomato', 'Lantern', 'Machinery Vehicle', 'Fan', 'Green Vegetables', 'Banana', 'Baseball Glove', 'Airplane', 'Mouse', 'Train', 'Pumpkin', 'Soccer', 'Skiboard', 'Luggage', 'Nightstand', 'Tea pot', 'Telephone', 'Trolley', 'Head Phone', 'Sports Car', 'Stop Sign', 'Dessert', 'Scooter', 'Stroller', 'Crane', 'Remote', 'Refrigerator', 'Oven', 'Lemon', 'Duck', 'Baseball Bat', 'Surveillance Camera', 'Cat', 'Jug', 'Broccoli', 'Piano', 'Pizza', 'Elephant', 'Skateboard', 'Surfboard', 'Gun', 'Skating and Skiing shoes', 'Gas stove', 'Donut', 'Bow Tie', 'Carrot', 'Toilet', 'Kite', 'Strawberry', 'Other Balls', 'Shovel', 'Pepper', 'Computer Box', 'Toilet Paper', 'Cleaning Products', 'Chopsticks', 'Microwave', 'Pigeon', 'Baseball', 'Cutting/chopping Board', 'Coffee Table', 'Side Table', 'Scissors', 'Marker', 'Pie', 'Ladder', 'Snowboard', 'Cookies', 'Radiator', 'Fire Hydrant', 'Basketball', 'Zebra', 'Grape', 'Giraffe', 'Potato', 'Sausage', 'Tricycle', 'Violin', 'Egg', 'Fire Extinguisher', 'Candy', 'Fire Truck', 'Billards', 'Converter', 'Bathtub', 'Wheelchair', 'Golf Club', 'Briefcase', 'Cucumber', 'Cigar/Cigarette ', 'Paint Brush', 'Pear', 'Heavy Truck', 'Hamburger', 'Extractor', 'Extention Cord', 'Tong', 'Tennis Racket', 'Folder', 'American Football', 'earphone', 'Mask', 'Kettle', 'Tennis', 'Ship', 'Swing', 'Coffee Machine', 'Slide', 'Carriage', 'Onion', 'Green beans', 'Projector', 'Frisbee', 'Washing Machine/Drying Machine', 'Chicken', 'Printer', 'Watermelon', 'Saxophone', 'Tissue', 'Toothbrush', 'Ice cream', 'Hotair ballon', 'Cello', 'French Fries', 'Scale', 'Trophy', 'Cabbage', 'Hot dog', 'Blender', 'Peach', 'Rice', 'Wallet/Purse', 'Volleyball', 'Deer', 'Goose', 'Tape', 'Tablet', 'Cosmetics', 'Trumpet', 'Pineapple', 'Golf Ball', 'Ambulance', 'Parking meter', 'Mango', 'Key', 'Hurdle', 'Fishing Rod', 'Medal', 'Flute', 'Brush', 'Penguin', 'Megaphone', 'Corn', 'Lettuce', 'Garlic', 'Swan', 'Helicopter', 'Green Onion', 'Sandwich', 'Nuts', 'Speed Limit Sign', 'Induction Cooker', 'Broom', 'Trombone', 'Plum', 'Rickshaw', 'Goldfish', 'Kiwi fruit', 'Router/modem', 'Poker Card', 'Toaster', 'Shrimp', 'Sushi', 'Cheese', 'Notepaper', 'Cherry', 'Pliers', 'CD', 'Pasta', 'Hammer', 'Cue', 'Avocado', 'Hamimelon', 'Flask', 'Mushroon', 'Screwdriver', 'Soap', 'Recorder', 'Bear', 'Eggplant', 'Board Eraser', 'Coconut', 'Tape Measur/ Ruler', 'Pig', 'Showerhead', 'Globe', 'Chips', 'Steak', 'Crosswalk Sign', 'Stapler', 'Campel', 'Formula 1 ', 'Pomegranate', 'Dishwasher', 'Crab', 'Hoverboard', 'Meat ball', 'Rice Cooker', 'Tuba', 'Calculator', 'Papaya', 'Antelope', 'Parrot', 'Seal', 'Buttefly', 'Dumbbell', 'Donkey', 'Lion', 'Urinal', 'Dolphin', 'Electric Drill', 'Hair Dryer', 'Egg tart', 'Jellyfish', 'Treadmill', 'Lighter', 'Grapefruit', 'Game board', 'Mop', 'Radish', 'Baozi', 'Target', 'French', 'Spring Rolls', 'Monkey', 'Rabbit', 'Pencil Case', 'Yak', 'Red Cabbage', 'Binoculars', 'Asparagus', 'Barbell', 'Scallop', 'Noddles', 'Comb', 'Dumpling', 'Oyster', 'Table Teniis paddle', 'Cosmetics Brush/Eyeliner Pencil', 'Chainsaw', 'Eraser', 'Lobster', 'Durian', 'Okra', 'Lipstick', 'Cosmetics Mirror', 'Curling', 'Table Tennis '])
+        # 处理图片
+        image = features.get('image', None)
+        # 生成bbox
+        bboxes = np.asarray([i["bbox"] for i in features['anns_info']])
+        categorys = [i["category"] for i in features['anns_info']]
+        c, num = random.choice(Counter(categorys).most_common())
+        mask = [i==c for i in categorys]
+        bboxes = bboxes[np.where(mask)].tolist()
+        bboxes.sort(key=lambda a: a[0] * 100 + a[1])
+        sbboxes = [bbox_to_sbbox(bbox, *image.size) for bbox in bboxes]
+        # 对话模式 - 个数不对
+        num_less = num - random.randint(0, num-1)
+        num_more = num + random.randint(1, 4)
+        # 对话模式 - 负样例类别
+        false_c = random.choice(list(known_cates - set(categorys)))
+        c = c.replace("/", " or ")
+        false_c = false_c.replace("/", " or ")
+        
+        # 处理文本
+        src_candidate = [
+            f" \n#instruction: point out the location of any {num_less} {c}.",
+            f" \n#instruction: point out the location of any {num_more} {c}.",
+            f" \n#instruction: where are {c} located?",
+            f" \n#instruction: how many {c} are there? where are they located?",
+            f" \n#instruction: how many {false_c} are there? where are they located?"
+        ]
+        tgt_candidate = [  # num_less
+            f" there are {num} {c}. here are {num_less} of them.\n" + "\n".join([f"- region: {sbbox}" for sbbox in random.choices(sbboxes, k=num_less)]),
+            f" there are only {num} {c}.\n" + "\n".join([f"- region: {sbbox}" for sbbox in sbboxes]),
+            f" there are {num} {c}.\n" + "\n".join([f"- region: {sbbox}" for sbbox in sbboxes]),
+            f" there are {num} {c}.\n" + "\n".join([f"- region: {sbbox}" for sbbox in sbboxes]),
+            f" there is no {false_c}.",
+        ]
+        if style is None:
+            weights = [2, 2, 4, 2, 1]
+            style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+
 ## ====== end of TaskProcess ======
 
 
@@ -440,7 +496,7 @@ class DataCollatorForOFA(transformers.DataCollatorForSeq2Seq):
     image_processor: Optional[Any] = None
     padding: Optional[str] = "longest"
     max_src_length: Optional[int] = 256
-    max_tgt_length: Optional[int] = 64
+    max_tgt_length: Optional[int] = 128
     return_tensors: Optional[str] = "pt"
     
     def __call__(self, features, return_tensors=None):
@@ -477,6 +533,7 @@ class DataCollatorForOFA(transformers.DataCollatorForSeq2Seq):
 
 class OFADataset(FairseqDataset, torch.utils.data.Dataset):  # ~OFADataset
     def __init__(self, dataset, tokenizer=None, image_processor=None, **args):
+        from datasets.distributed import split_dataset_by_node
         # 分布式适配
         _, rank, world_size = world_info_from_env()
         self.dataset = split_dataset_by_node(dataset, rank=rank, world_size=world_size)

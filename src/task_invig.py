@@ -117,6 +117,7 @@ class InvigTask(OFATask):
             self.config = yaml.load(f, Loader=yaml.FullLoader)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
+        from datasets.distributed import split_dataset_by_node
         # paths = self.cfg.data.split(',')
         # assert len(paths) > 0
         _split = "validation" if split == "valid" else split
@@ -126,8 +127,11 @@ class InvigTask(OFATask):
         _, rank, world_size = world_info_from_env()
         for i in self.config[_split]:
             name = i['name']
-            ds = load_from_disk(i['path'])[_split]
-            ds = datasets.distributed.split_dataset_by_node(ds, rank=rank, world_size=world_size).to_iterable_dataset(48)
+            logger.info(f"loading {name}-{_split}")
+            ds = datasets.load_dataset(i['path'], streaming=i.get('streaming', False))[_split]
+            ds = split_dataset_by_node(ds, rank=rank, world_size=world_size)
+            if type(ds) is not datasets.iterable_dataset.IterableDataset:
+                ds = ds.to_iterable_dataset(32)
             for task, prob in zip(i['tasks'], i['probs']):
                 ds_task = ds.filter(MapFunc.filter_exclude_test_images).map(MapFunc.map_read_images)\
                        .map(getattr(MapFunc, task)).select_columns(['src_text', 'tgt_text', 'image'])\
@@ -140,9 +144,8 @@ class InvigTask(OFATask):
         sampler = GenSampler(generators=use_datasets, weights=probs)
 
         # 3 构造fairseq_dataset，送进去预处理函数
-        total_count = 300_000 if split == 'train' else 1000
-        dataset = OFADataset(sampler, *self.processor, total_count=total_count)
-        self.datasets[split] = dataset
+        total_count = 600_000 if split == 'train' else 1000
+        self.datasets[split] = OFADataset(sampler, *self.processor, total_count=total_count)
 
         # 4 打印logs
         logger.info(f"load {split} data: {len(use_datasets)} ({total_count}) dataset(s) *** {[i[2] for i in datasets_collection]}")

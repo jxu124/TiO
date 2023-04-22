@@ -1,37 +1,46 @@
 
 train:
   - name: "invig"  # 17652
-    path: "/mnt/bn/hri-lq/datasets/hf/invig"
+    path: /mnt/bn/data-lq/datasets-hf/dialog/invig
     tasks: ["invig_question", "invig_answer", "invig_grounding"]
     probs: [0.1, 0.1, 0.1]  # 0.03
-  - name: "guesswhat"  # 71165
-    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat-success"
+  - name: guesswhat  # 71165
+    path: /mnt/bn/data-lq/datasets-hf/dialog/guesswhat
     tasks: ["guesswhat_question", "guesswhat_answer", "guesswhat_grounding"]
-    probs: [0.1, 0.1, 0.2]  # 0.136
-  - name: "visdial"  # 106061
-    path: "/mnt/bn/hri-lq/datasets/hf/visdial"
+    probs: [0.1, 0.1, 0.1]  # 0.136
+  - name: visdial  # 106061
+    path: /mnt/bn/data-lq/datasets-hf/dialog/visdial
     tasks: ["visdial_question", "visdial_answer"]
     probs: [0.1, 0.1]  # 0.2
-  - name: "refcoco"  # 42404
-    path: "/mnt/bn/hri-lq/datasets/hf/refcoco"
+  - name: refcoco  # 42404
+    path: /mnt/bn/data-lq/datasets-hf/vision/refcoco
     tasks: ["refcoco_grounding"]
-    probs: [0.1]  # 0.08
-
-validation: 
-  - name: "invig"
-    path: "/mnt/bn/hri-lq/datasets/hf/invig"
-    tasks: ["invig_grounding"]
-    probs: [0.4]
-  - name: "guesswhat"
-    path: "/mnt/bn/hri-lq/datasets/hf/guesswhat-success"
-    tasks: ["guesswhat_grounding"]
-    probs: [0.5]
-  - name: "refcoco"
-    path: "/mnt/bn/hri-lq/datasets/hf/refcoco"
+    probs: [0.05]  # 0.08
+  - name: refcocog  # 42404
+    path: /mnt/bn/data-lq/datasets-hf/vision/refcocog
     tasks: ["refcoco_grounding"]
+    probs: [0.05]  # 0.08
+  - name: refcocoplus  # 42404
+    path: /mnt/bn/data-lq/datasets-hf/vision/refcocoplus
+    tasks: ["refcoco_grounding"]
+    probs: [0.05]  # 0.08
+  - name: "objects365"
+    path: "/mnt/bn/data-lq/datasets-hf/vision/objects365"
+    tasks: ["objects365_grounding"]
+    streaming: true
     probs: [0.1]
 
+validation: 
+  - name: "invig"  # 17652
+    path: /mnt/bn/data-lq/datasets-hf/dialog/invig
+    tasks: ["invig_grounding"]
+    probs: [0.5]
+  - name: guesswhat  # 71165
+    path: /mnt/bn/data-lq/datasets-hf/dialog/guesswhat
+    tasks: ["guesswhat_grounding"]
+    probs: [0.5]
+
 path_images:
-  "coco/": "/mnt/bn/hri-lq/datasets/coco/"
-  "visdial/": "/mnt/bn/hri-lq/datasets/images/visdial/"
-  "openimages_v1.2/": "/mnt/bn/hri-lq/datasets/openimages_v1.2/"
+  "coco": "/mnt/bn/hri-lq/datasets/coco"
+  "visdial": "/mnt/bn/hri-lq/datasets/images/visdial"
+  "openimages": "/mnt/bn/hri-lq/datasets/openimages_v1.2"

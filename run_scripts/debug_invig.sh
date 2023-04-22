@@ -1,7 +1,7 @@
 #!/usr/bin/env
 
 # ==== 基本参数 ====
-num_gpus=2
+num_gpus=1
 # load from .env file
 python3 -c "from g2p_en import G2p"
 ENV_FILE=$(dirname "$0")/../.env
@@ -34,7 +34,7 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=4
+batch_size=12
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
@@ -63,8 +63,8 @@ for max_epoch in 10; do
       echo "log_file "${log_file}
 
       # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
-      # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} --use_env ${PATH_D_OFA}/train.py \
-      python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
+      # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
+      python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} --use_env ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
           --bpe-dir=${bpe_dir} \
@@ -114,7 +114,7 @@ for max_epoch in 10; do
           --fp16 \
           --fp16-scale-window=512 \
           --eval-print-samples \
-          --num-workers=4 > ${log_file} 2>&1
+          --num-workers=1 > ${log_file} 2>&1
           # --memory-efficient-fp16 \
           # --bf16 \
     done
