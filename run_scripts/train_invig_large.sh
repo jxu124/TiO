@@ -34,7 +34,7 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=14
+batch_size=12
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
@@ -63,6 +63,7 @@ for max_epoch in 10; do
       echo "log_file "${log_file}
 
       # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
+      # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
       python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
@@ -113,7 +114,7 @@ for max_epoch in 10; do
           --fp16 \
           --fp16-scale-window=512 \
           --eval-print-samples \
-          --num-workers=4 > ${log_file} 2>&1
+          --num-workers=1 > ${log_file} 2>&1
           # --memory-efficient-fp16 \
           # --bf16 \
     done

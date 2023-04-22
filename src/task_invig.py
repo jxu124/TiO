@@ -87,7 +87,8 @@ class OFADataset(FairseqDataset):  # ~OFADataset
 
     def __getitem__(self, index):
         try:
-            assert self.worker_info is not None
+            assert self.worker_info == torch.utils.data.get_worker_info()
+            # assert self.worker_info is not None
             data = next(self.it)
         except (StopIteration, TypeError, AssertionError):
             self.init_worker()
@@ -95,7 +96,8 @@ class OFADataset(FairseqDataset):  # ~OFADataset
         return data
     
     def __len__(self):
-        return self.total_count
+        _, rank, world_size = world_info_from_env()
+        return self.total_count // world_size
 
     def set_epoch(self, epoch):
         super().set_epoch(epoch)
@@ -135,7 +137,7 @@ class InvigTask(OFATask):
             for task, prob in zip(i['tasks'], i['probs']):
                 ds_task = ds.filter(MapFunc.filter_exclude_test_images).map(MapFunc.map_read_images)\
                        .map(getattr(MapFunc, task)).select_columns(['src_text', 'tgt_text', 'image'])\
-                       .cast(Features({'src_text': Value("string"), 'tgt_text': Value("string"), 'image': datasets.Image()})).shuffle()
+                       .cast(Features({'src_text': Value("string"), 'tgt_text': Value("string"), 'image': datasets.Image()})).shuffle(buffer_size=100)
                 datasets_collection += [(name, ds_task, task, prob)]
 
         # 2 按照比例组合数据
