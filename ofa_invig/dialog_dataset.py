@@ -50,47 +50,46 @@ ds_gnding = AnswerDataset(ds_gnding, image_processor)
 ds_all = interleave_datasets([ds_question, ds_answer, ds_gnding], probabilities=[0.33, 0.33, 0.33], seed=42, stopping_strategy="all_exhausted")
 """
 
-
 class MapFunc():
-    with open("/mnt/bn/hri-lq/datasets/hf/test_images.json", "r") as f:
+    with open("/mnt/bn/hri-lq/datasets/hf-cache/test_images.json", "r") as f:
         test_images = set(json.load(f))
-    with open('/mnt/bn/hri-lq/projects/OFA-Invig/config/invig_4ds.yml') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-    path_images = config['path_images']
+    with open('/mnt/bn/hri-lq/projects/OFA-Invig/config/invig_env.yml') as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
+    path_images = cfg['env']['path_images']
 
     @staticmethod
-    def filter_exclude_test_images(features):
-        return features['global_image_id'] not in MapFunc.test_images
+    def filter_exclude_test_images(global_image_id):
+        # ds.filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
+        if type(global_image_id) is list:
+            return [(i not in MapFunc.test_images) for i in global_image_id]
+        elif type(global_image_id) is str:  # str
+            return global_image_id not in MapFunc.test_images
+        else:
+            raise ValueError
     
     @staticmethod
-    def map_read_images(features):
-        if features.get('image') is None:
-            ds, image_id = features['global_image_id'].split('.')
-            image_dir = MapFunc.config['path_images'][ds]
-            if ds == "coco":
-                if os.path.exists(f"{image_dir}/train2014/COCO_train2014_{int(image_id):012d}.jpg"):
-                    image_path = f"{image_dir}/train2014/COCO_train2014_{int(image_id):012d}.jpg"
-                elif os.path.exists(f"{image_dir}/val2014/COCO_val2014_{int(image_id):012d}.jpg"):
-                    image_path = f"{image_dir}/val2014/COCO_val2014_{int(image_id):012d}.jpg"
-            elif ds == "visdial":
-                image_path = features.get('image_path').replace('visdial', image_dir, 1)
-            elif ds == "openimages":
-                image_path = features.get('image_path').replace('openimages_v1.2', image_dir, 1)
-            features['image'] = Image.open(image_path)
-        return features
-
+    def load_image(image_path):
+        if type(image_path) is dict:
+            image_path['image'] = MapFunc.load_image(image_path['image_path'])['image']
+            return image_path
+        # ds.map(MapFunc.load_images, input_columns=['image_path'])
+        for k, v in MapFunc.path_images.items():
+            image_path = image_path.replace(k, v, 1)
+        image = Image.open(image_path)
+        return {'image': image}
+    
 ## ====== refcoco ======
 
     @staticmethod
     def refcoco_grounding(features):
         """ 任务数据集：Grounding """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
-        bbox = features.get('bbox', None)
+        bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        context = random.choice(features['texts'])
+        context = random.choice(json.loads(features['texts']))
         src_candidate = [
             f" \n#instruction: which region does the context describe? \n#context: \"{context}\"",
         ]
@@ -108,10 +107,10 @@ class MapFunc():
     def visdial_question(features, weights=None):
         """ question_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理文本
         caption = features['caption']
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = [f"query: let's talk about the picture."]
         for t in range(turn-1):
@@ -140,10 +139,10 @@ class MapFunc():
     def visdial_answer(features, weights=None):
         """ answer_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理文本
         caption = features['caption']
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = [f"query: let's talk about the picture."]
         for t in range(turn-1):
@@ -181,7 +180,7 @@ class MapFunc():
         # bbox = features.get('bbox', None)
         # sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         turn_right = len(dialog) - 1 if "?" not in dialog[-1][0] else len(dialog)  # 消除ok, i see.
         turn = random.randint(2, max(2, turn_right))  # 选一个轮数，来作为tgt_text
         context = [f"query: {dialog[0][1]}"]
@@ -215,12 +214,12 @@ class MapFunc():
     def invig_answer(features, weights=None):
         """ answer_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
-        bbox = features.get('bbox', None)
+        bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         turn_right = len(dialog) - 1 if "?" not in dialog[-1][0] else len(dialog)  # 消除ok, i see.
         turn = random.randint(2, max(2, turn_right))  # 选一个轮数，来作为tgt_text
         context = [f"query: {dialog[0][1]}"]
@@ -251,12 +250,12 @@ class MapFunc():
     def invig_grounding(features, weights=None, test=False):
         """ grounding_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
-        bbox = features.get('bbox', None)
+        bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         context = [f"query: {dialog[0][1]}"]
         for t in range(1, len(dialog)):
             context += [f"question: {dialog[t][0]}"]
@@ -285,12 +284,12 @@ class MapFunc():
     def guesswhat_question(features):
         """ question_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
         # bbox = features.get('bbox', None)
         # sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = [f"query: guess what i want."]
         for t in range(turn-1):
@@ -323,12 +322,12 @@ class MapFunc():
     def guesswhat_answer(features, weights=None):
         """ answer_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
-        bbox = features.get('bbox', None)
+        bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = [f"query: guess what i want."]
         for t in range(turn-1):
@@ -358,12 +357,12 @@ class MapFunc():
     def guesswhat_grounding(features, weights=None):
         """ grounding_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
-        bbox = features.get('bbox', None)
+        bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         context = [f"query: guess what i want."]
         for t in range(0, len(dialog)):
             context += [f"question: {dialog[t][0]}"]
@@ -391,12 +390,12 @@ class MapFunc():
     def invig_grounding_ofa(features, weights=None):
         """ grounding_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
-        bbox = features.get('bbox', None)
+        bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         context = [f"query: {dialog[0][1]}"]
         for t in range(1, len(dialog)):
             context += [f"question: {dialog[t][0]}"]
@@ -418,12 +417,12 @@ class MapFunc():
     def guesswhat_answer_oracle(features, weights=None):
         """ answer_invig """
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 处理bbox
-        bbox = features.get('bbox', None)
+        bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        dialog = features['dialog']
+        dialog = json.loads(features['dialog'])
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = f"query: guess what i want."
         question = dialog[turn-1][0]
@@ -448,10 +447,11 @@ class MapFunc():
         """ 任务数据集：Grounding """
         known_cates = set(['Person', 'Sneakers', 'Chair', 'Other Shoes', 'Hat', 'Car', 'Lamp', 'Glasses', 'Bottle', 'Desk', 'Cup', 'Street Lights', 'Cabinet/shelf', 'Handbag/Satchel', 'Bracelet', 'Plate', 'Picture/Frame', 'Helmet', 'Book', 'Gloves', 'Storage box', 'Boat', 'Leather Shoes', 'Flower', 'Bench', 'Potted Plant', 'Bowl/Basin', 'Flag', 'Pillow', 'Boots', 'Vase', 'Microphone', 'Necklace', 'Ring', 'SUV', 'Wine Glass', 'Belt', 'Moniter/TV', 'Backpack', 'Umbrella', 'Traffic Light', 'Speaker', 'Watch', 'Tie', 'Trash bin Can', 'Slippers', 'Bicycle', 'Stool', 'Barrel/bucket', 'Van', 'Couch', 'Sandals', 'Bakset', 'Drum', 'Pen/Pencil', 'Bus', 'Wild Bird', 'High Heels', 'Motorcycle', 'Guitar', 'Carpet', 'Cell Phone', 'Bread', 'Camera', 'Canned', 'Truck', 'Traffic cone', 'Cymbal', 'Lifesaver', 'Towel', 'Stuffed Toy', 'Candle', 'Sailboat', 'Laptop', 'Awning', 'Bed', 'Faucet', 'Tent', 'Horse', 'Mirror', 'Power outlet', 'Sink', 'Apple', 'Air Conditioner', 'Knife', 'Hockey Stick', 'Paddle', 'Pickup Truck', 'Fork', 'Traffic Sign', 'Ballon', 'Tripod', 'Dog', 'Spoon', 'Clock', 'Pot', 'Cow', 'Cake', 'Dinning Table', 'Sheep', 'Hanger', 'Blackboard/Whiteboard', 'Napkin', 'Other Fish', 'Orange/Tangerine', 'Toiletry', 'Keyboard', 'Tomato', 'Lantern', 'Machinery Vehicle', 'Fan', 'Green Vegetables', 'Banana', 'Baseball Glove', 'Airplane', 'Mouse', 'Train', 'Pumpkin', 'Soccer', 'Skiboard', 'Luggage', 'Nightstand', 'Tea pot', 'Telephone', 'Trolley', 'Head Phone', 'Sports Car', 'Stop Sign', 'Dessert', 'Scooter', 'Stroller', 'Crane', 'Remote', 'Refrigerator', 'Oven', 'Lemon', 'Duck', 'Baseball Bat', 'Surveillance Camera', 'Cat', 'Jug', 'Broccoli', 'Piano', 'Pizza', 'Elephant', 'Skateboard', 'Surfboard', 'Gun', 'Skating and Skiing shoes', 'Gas stove', 'Donut', 'Bow Tie', 'Carrot', 'Toilet', 'Kite', 'Strawberry', 'Other Balls', 'Shovel', 'Pepper', 'Computer Box', 'Toilet Paper', 'Cleaning Products', 'Chopsticks', 'Microwave', 'Pigeon', 'Baseball', 'Cutting/chopping Board', 'Coffee Table', 'Side Table', 'Scissors', 'Marker', 'Pie', 'Ladder', 'Snowboard', 'Cookies', 'Radiator', 'Fire Hydrant', 'Basketball', 'Zebra', 'Grape', 'Giraffe', 'Potato', 'Sausage', 'Tricycle', 'Violin', 'Egg', 'Fire Extinguisher', 'Candy', 'Fire Truck', 'Billards', 'Converter', 'Bathtub', 'Wheelchair', 'Golf Club', 'Briefcase', 'Cucumber', 'Cigar/Cigarette ', 'Paint Brush', 'Pear', 'Heavy Truck', 'Hamburger', 'Extractor', 'Extention Cord', 'Tong', 'Tennis Racket', 'Folder', 'American Football', 'earphone', 'Mask', 'Kettle', 'Tennis', 'Ship', 'Swing', 'Coffee Machine', 'Slide', 'Carriage', 'Onion', 'Green beans', 'Projector', 'Frisbee', 'Washing Machine/Drying Machine', 'Chicken', 'Printer', 'Watermelon', 'Saxophone', 'Tissue', 'Toothbrush', 'Ice cream', 'Hotair ballon', 'Cello', 'French Fries', 'Scale', 'Trophy', 'Cabbage', 'Hot dog', 'Blender', 'Peach', 'Rice', 'Wallet/Purse', 'Volleyball', 'Deer', 'Goose', 'Tape', 'Tablet', 'Cosmetics', 'Trumpet', 'Pineapple', 'Golf Ball', 'Ambulance', 'Parking meter', 'Mango', 'Key', 'Hurdle', 'Fishing Rod', 'Medal', 'Flute', 'Brush', 'Penguin', 'Megaphone', 'Corn', 'Lettuce', 'Garlic', 'Swan', 'Helicopter', 'Green Onion', 'Sandwich', 'Nuts', 'Speed Limit Sign', 'Induction Cooker', 'Broom', 'Trombone', 'Plum', 'Rickshaw', 'Goldfish', 'Kiwi fruit', 'Router/modem', 'Poker Card', 'Toaster', 'Shrimp', 'Sushi', 'Cheese', 'Notepaper', 'Cherry', 'Pliers', 'CD', 'Pasta', 'Hammer', 'Cue', 'Avocado', 'Hamimelon', 'Flask', 'Mushroon', 'Screwdriver', 'Soap', 'Recorder', 'Bear', 'Eggplant', 'Board Eraser', 'Coconut', 'Tape Measur/ Ruler', 'Pig', 'Showerhead', 'Globe', 'Chips', 'Steak', 'Crosswalk Sign', 'Stapler', 'Campel', 'Formula 1 ', 'Pomegranate', 'Dishwasher', 'Crab', 'Hoverboard', 'Meat ball', 'Rice Cooker', 'Tuba', 'Calculator', 'Papaya', 'Antelope', 'Parrot', 'Seal', 'Buttefly', 'Dumbbell', 'Donkey', 'Lion', 'Urinal', 'Dolphin', 'Electric Drill', 'Hair Dryer', 'Egg tart', 'Jellyfish', 'Treadmill', 'Lighter', 'Grapefruit', 'Game board', 'Mop', 'Radish', 'Baozi', 'Target', 'French', 'Spring Rolls', 'Monkey', 'Rabbit', 'Pencil Case', 'Yak', 'Red Cabbage', 'Binoculars', 'Asparagus', 'Barbell', 'Scallop', 'Noddles', 'Comb', 'Dumpling', 'Oyster', 'Table Teniis paddle', 'Cosmetics Brush/Eyeliner Pencil', 'Chainsaw', 'Eraser', 'Lobster', 'Durian', 'Okra', 'Lipstick', 'Cosmetics Mirror', 'Curling', 'Table Tennis '])
         # 处理图片
-        image = features.get('image', None)
+        image = features['image']
         # 生成bbox
-        bboxes = np.asarray([i["bbox"] for i in features['anns_info']])
-        categorys = [i["category"] for i in features['anns_info']]
+        anns_info = json.loads(features['anns_info'])
+        bboxes = np.asarray([i["bbox"] for i in anns_info])
+        categorys = [i["category"] for i in anns_info]
         c, num = random.choice(Counter(categorys).most_common())
         mask = [i==c for i in categorys]
         bboxes = bboxes[np.where(mask)].tolist()

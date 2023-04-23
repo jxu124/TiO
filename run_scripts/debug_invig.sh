@@ -2,27 +2,29 @@
 
 # ==== 基本参数 ====
 num_gpus=1
-# load from .env file
-python3 -c "from g2p_en import G2p"
-ENV_FILE=$(dirname "$0")/../.env
-export $(xargs < $ENV_FILE)
-cd /mnt/bn/hri-lq/projects/VLDD/OFA-Invig/src
+PATH_D_INVIG=/mnt/bn/hri-lq/projects/OFA-Invig
+PATH_D_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
+PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 
-# ==== 训练数据 ====
-data="invig,invig"
-restore_file=${PATH_D_CHECKPOINTS}/ofa_large.pt
+# ==== 预训练模型 ====
+restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_large.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
 restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
 restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_last.pt  # best?
+
+# ==== 训练数据 ====
+data="invig,invig"
 selected_cols=0
+python3 -c "from g2p_en import G2p"
 
 # ==== 日志参数 ====
 log_dir=${PATH_D_LOG}/invig_large_grounding_logs_debug
 save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints_debug
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
-user_dir=${PATH_D_INVIG}/src
+user_dir=${PATH_D_INVIG}/ofa_invig
+cd $user_dir
 
 # ==== 环境设置(无需更改) ====
 export PYTHONPATH=$PYTHONPATH:${PATH_D_OFA}/fairseq
@@ -34,7 +36,7 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=12
+batch_size=3
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
@@ -115,8 +117,6 @@ for max_epoch in 10; do
           --fp16-scale-window=512 \
           --eval-print-samples \
           --num-workers=4 > ${log_file} 2>&1
-          # --memory-efficient-fp16 \
-          # --bf16 \
     done
   done
 done

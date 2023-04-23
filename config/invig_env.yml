@@ -3,6 +3,10 @@ env:
     path_ofa: "/mnt/bn/hri-lq/projects/VLDD/OFA"
     path_invig: "/mnt/bn/hri-lq/projects/OFA-Invig"
     path_tokenizer: "/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/hf/ofa-large"
+    path_images:
+      coco: "/mnt/bn/hri-lq/datasets/images/coco"
+      visdial: "/mnt/bn/hri-lq/datasets/images/visdial"
+      openimages_v1.2: "/mnt/bn/hri-lq/datasets/images/openimages_v1.2"
 
 train:
   - name: "invig"  # 17652
@@ -37,15 +41,10 @@ train:
 
 validation: 
   - name: "invig"  # 17652
-    path: /mnt/bn/data-lq/datasets-hf/dialog/invig
+    path: /mnt/bn/hri-lq/datasets/hf-cache/invig
     tasks: ["invig_grounding"]
     probs: [0.5]
   - name: guesswhat  # 71165
-    path: /mnt/bn/data-lq/datasets-hf/dialog/guesswhat
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
     tasks: ["guesswhat_grounding"]
     probs: [0.5]
-
-path_images:
-  "coco": "/mnt/bn/hri-lq/datasets/images/coco"
-  "visdial": "/mnt/bn/hri-lq/datasets/images/visdial"
-  "openimages": "/mnt/bn/hri-lq/datasets/images/openimages_v1.2"

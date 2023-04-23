@@ -11,6 +11,7 @@ from typing import Optional
 from argparse import Namespace
 from tqdm import tqdm
 from omegaconf import DictConfig
+import numpy as np
 
 # fairseq的模块
 from fairseq import metrics
@@ -24,6 +25,7 @@ from .dialog_dataset import MapFunc, DataCollatorForOFA, GenSampler
 from .common import get_processor, world_info_from_env
 
 # huggingface 的模块
+from datasets.distributed import split_dataset_by_node
 from datasets import load_dataset, load_from_disk
 import datasets
 
@@ -69,40 +71,46 @@ from datasets import load_from_disk, Features, Value
 from fairseq.data import FairseqDataset
         
         
-class OFADataset(FairseqDataset):  # ~OFADataset
-    def __init__(self, sampler, tokenizer=None, image_processor=None, total_count=20_000):
-        # 分布式适配
-        self.sampler = sampler
+# iterable 数据集：包装为普通数据集
+
+import bisect
+import argparse
+class OFADataset(torch.utils.data.ConcatDataset, FairseqDataset):  # ~OFADataset
+    def __init__(self, datasets, tasks=None, tokenizer=None, image_processor=None):
+        _, rank, world_size = world_info_from_env()
+        total_count = sum([len(ds) for ds in datasets])
+        self.ds_list = [split_dataset_by_node(ds, rank, world_size) for ds in datasets]
+        self.dataset = argparse.Namespace(**{'get_total_row_count': lambda: total_count, "_seek": lambda offset=0: None})
+        super().__init__(self.ds_list)
+        self.tasks = tasks
         self.tokenizer, self.image_processor = tokenizer, image_processor
 
-        self.it = None
-        self.worker_info = None
-
-        self.total_count = total_count
-        self.dataset = Namespace(**{'get_total_row_count': lambda: self.total_count, "_seek": lambda offset=0: None})
-
-    def init_worker(self):
-        self.worker_info = torch.utils.data.get_worker_info()
-        self.it = self.sampler()
-
-    def __getitem__(self, index):
-        try:
-            assert self.worker_info == torch.utils.data.get_worker_info()
-            # assert self.worker_info is not None
-            data = next(self.it)
-        except (StopIteration, TypeError, AssertionError):
-            self.init_worker()
-            data = next(self.it)
-        return data
+    def __getitem__(self, idx):
+        if idx < 0:
+            if -idx > len(self):
+                raise ValueError("absolute value of index should not exceed dataset length")
+            idx = len(self) + idx
+        dataset_idx = bisect.bisect_right(self.cumulative_sizes, idx)
+        if dataset_idx == 0:
+            sample_idx = idx
+        else:
+            sample_idx = idx - self.cumulative_sizes[dataset_idx - 1]
+        data = self.datasets[dataset_idx][sample_idx]
+        if self.tasks is not None:
+            return getattr(MapFunc, self.tasks[dataset_idx])(MapFunc.load_image(data))
+        else:
+            return MapFunc.load_image(data)
     
     def __len__(self):
-        _, rank, world_size = world_info_from_env()
-        return self.total_count // world_size
+        return super().__len__()
 
     def set_epoch(self, epoch):
         super().set_epoch(epoch)
-        for ds in self.sampler.generators:
-            ds.set_epoch(epoch)
+        for ds in self.ds_list:
+            if hasattr(ds, "shuffle"):
+                ds.shuffle(epoch)
+            elif hasattr(ds, "set_epoch"):
+                ds.set_epoch(epoch)
 
     def collater(self, samples, pad_to_length=None):
         collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
@@ -115,43 +123,41 @@ class InvigTask(OFATask):
         super().__init__(cfg, src_dict, tgt_dict)
 
         self.processor = get_processor(resolution=512)
-        with open('/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_4ds.yml') as f:
-            self.config = yaml.load(f, Loader=yaml.FullLoader)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
-        from datasets.distributed import split_dataset_by_node
         # paths = self.cfg.data.split(',')
         # assert len(paths) > 0
         _split = "validation" if split == "valid" else split
 
         # 1 按照node切分数据集
         datasets_collection = []
-        _, rank, world_size = world_info_from_env()
-        for i in self.config[_split]:
+        for i in MapFunc.cfg[_split]:
+            if i.get('streaming'):
+                continue
             name = i['name']
-            logger.info(f"loading {name}-{_split}")
-            ds = datasets.load_dataset(i['path'], streaming=i.get('streaming', False))[_split]
-            ds = split_dataset_by_node(ds, rank=rank, world_size=world_size)
-            if type(ds) is not datasets.iterable_dataset.IterableDataset:
-                ds = ds.to_iterable_dataset(32)
+            logger.info(f"loading {name}-{_split} from {i['path']}")
+            ds = datasets.load_from_disk(i['path'])[_split]
+            ds = ds.filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
             for task, prob in zip(i['tasks'], i['probs']):
-                ds_task = ds.filter(MapFunc.filter_exclude_test_images).map(MapFunc.map_read_images)\
-                       .map(getattr(MapFunc, task)).select_columns(['src_text', 'tgt_text', 'image'])\
-                       .cast(Features({'src_text': Value("string"), 'tgt_text': Value("string"), 'image': datasets.Image()})).shuffle(buffer_size=100)
-                datasets_collection += [(name, ds_task, task, prob)]
+                datasets_collection += [(name, task, ds, prob)]
 
         # 2 按照比例组合数据
-        use_datasets = [i[1] for i in datasets_collection]
-        probs = [i[3] for i in datasets_collection]
-        sampler = GenSampler(generators=use_datasets, weights=probs)
+        use_datasets = [i[2] for i in datasets_collection]
+        probs = np.asarray([i[3] for i in datasets_collection])
+        probs = probs / probs.sum()
+        counts = np.asarray([len(ds) for ds in use_datasets])
+        total_count = np.min(counts / probs) if split == 'train' else 1024
+        n_samples = (total_count * probs).astype(int)
+        use_datasets = [ds.shuffle(keep_in_memory=True).select(range(n)) for ds, n in zip(use_datasets, n_samples)]
+        tasks = [i[1] for i in datasets_collection]
 
         # 3 构造fairseq_dataset，送进去预处理函数
-        total_count = 600_000 if split == 'train' else 1000
-        self.datasets[split] = OFADataset(sampler, *self.processor, total_count=total_count)
+        dataset = OFADataset(use_datasets, tasks, *self.processor)
+        self.datasets[split] = dataset
 
         # 4 打印logs
-        logger.info(f"load {split} data: {len(use_datasets)} ({total_count}) dataset(s) *** {[i[2] for i in datasets_collection]}")
-        # logger.info(f"load {split} data: {log_tasks}, n_shards={dataset.n_shards}")
+        logger.info(f"load {split} data: {len(use_datasets)} ({len(dataset)} samples) dataset(s)")
+        logger.info("Tasks: " + ", ".join([f'{t}({n})' for t, n in zip(tasks, n_samples)]))
 
     def build_model(self, cfg):
         model = super().build_model(cfg)

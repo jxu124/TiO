@@ -2,21 +2,29 @@
 
 # ==== 基本参数 ====
 num_gpus=1
-# load from .env file
-ENV_FILE=$(dirname "$0")/../.env
-export $(xargs < $ENV_FILE)
+PATH_D_INVIG=/mnt/bn/hri-lq/projects/OFA-Invig
+PATH_D_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
+PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
+
+# ==== 预训练模型 ====
+restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_large.pt
+# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
+# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_last.pt  # best?
 
 # ==== 训练数据 ====
-data=${PATH_D_DATASET}/invig_train.jsonl,${PATH_D_DATASET}/guesswhat_train.jsonl,${PATH_D_DATASET}/visdial_train.jsonl,${PATH_D_DATASET}/invig_valid.jsonl
-restore_file=${PATH_D_CHECKPOINTS}/ofa_huge.pt
+data="invig,invig"
 selected_cols=0
+python3 -c "from g2p_en import G2p"
 
 # ==== 日志参数 ====
-log_dir=${PATH_D_LOG}/invig_huge-3ds_logs
-save_dir=${PATH_D_LOG}/invig_huge-3ds_checkpoints
+log_dir=${PATH_D_LOG}/invig_large_grounding_logs_debug
+save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints_debug
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
-user_dir=${PATH_D_INVIG}/src
+user_dir=${PATH_D_INVIG}/ofa_invig
+cd $user_dir
 
 # ==== 环境设置(无需更改) ====
 export PYTHONPATH=$PYTHONPATH:${PATH_D_OFA}/fairseq
@@ -35,18 +43,12 @@ encoder_drop_path_rate=0.2
 decoder_drop_path_rate=0.2
 dropout=0.1
 attention_dropout=0.0
-max_src_length=256
-max_tgt_length=64
+max_src_length=280
+max_tgt_length=80
 num_bins=1000
 # lr=3e-5
 # max_epoch=5
 # patch_image_size=512
-
-uses_ema="--uses-ema"
-store_ema="--store-ema"
-ema_fp32="--ema-fp32"
-ema_decay=0.9999
-ema_start_update=0
 
 subfix=`date "+%Y%m%d-%H%M"`
 
@@ -62,9 +64,9 @@ for max_epoch in 10; do
       mkdir -p $save_path
       echo "log_file "${log_file}
 
-      # python3 -m torch.distributed.launch
-      # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} 
-      python3 ${PATH_D_OFA}/train.py \
+      # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
+      # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
+      python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} --use_env ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
           --bpe-dir=${bpe_dir} \
@@ -95,11 +97,11 @@ for max_epoch in 10; do
           --max-epoch=${max_epoch} --warmup-ratio=${warmup_ratio} \
           --log-format=simple --log-interval=10 \
           --fixed-validation-seed=7 \
-          --no-epoch-checkpoints --keep-best-checkpoints=3 \
+          --no-epoch-checkpoints --keep-best-checkpoints=2 \
           --save-interval=1 --validate-interval=1 \
           --save-interval-updates=1000 --validate-interval-updates=1000 \
           --eval-acc \
-          --eval-args='{"beam":5,"min_len":4,"max_len_a":0,"max_len_b":4}' \
+          --eval-args='{"beam":5,"min_len":1,"max_len_a":0,"max_len_b":100}' \
           --best-checkpoint-metric=score --maximize-best-checkpoint-metric \
           --max-src-length=${max_src_length} \
           --max-tgt-length=${max_tgt_length} \
@@ -113,11 +115,7 @@ for max_epoch in 10; do
           --patch-image-size=${patch_image_size} \
           --fp16 \
           --fp16-scale-window=512 \
-          ${uses_ema} \
-          ${store_ema} \
-          ${ema_fp32} \
-          --ema-decay=${ema_decay} \
-          --ema-start-update=${ema_start_update} \
+          --eval-print-samples \
           --num-workers=4 > ${log_file} 2>&1
     done
   done
