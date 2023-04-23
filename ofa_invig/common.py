@@ -125,8 +125,6 @@ class OFAModelWarper(torch.nn.Module):
         self.gens = self.load_from_pretrain(ckpt_path, ofa_path)
         _, self.model, _, task = self.gens
         self.tokenizer, self.image_processor = task.processor
-         # = OFATokenizer.from_pretrained(tokenizer_path, local_files_only=True, truncation_side="right")
-         # = get_image_processor(resolution)
         
     def forward(self, **batch):
         from transformers.modeling_outputs import Seq2SeqLMOutput

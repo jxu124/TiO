@@ -54,7 +54,7 @@ ds_all = interleave_datasets([ds_question, ds_answer, ds_gnding], probabilities=
 class MapFunc():
     with open("/mnt/bn/hri-lq/datasets/hf/test_images.json", "r") as f:
         test_images = set(json.load(f))
-    with open('/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_4ds.yml') as f:
+    with open('/mnt/bn/hri-lq/projects/OFA-Invig/config/invig_4ds.yml') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     path_images = config['path_images']
 
