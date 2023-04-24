@@ -70,6 +70,8 @@ class MapFunc():
     @staticmethod
     def load_image(image_path):
         if type(image_path) is dict:
+            if 'image' in image_path:
+                return image_path
             image_path['image'] = MapFunc.load_image(image_path['image_path'])['image']
             return image_path
         # ds.map(MapFunc.load_images, input_columns=['image_path'])
@@ -81,7 +83,7 @@ class MapFunc():
 ## ====== refcoco ======
 
     @staticmethod
-    def refcoco_grounding(features):
+    def refcoco_caption(features, style=None):
         """ 任务数据集：Grounding """
         # 处理图片
         image = features['image']
@@ -89,14 +91,40 @@ class MapFunc():
         bbox = features['bbox']
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # 处理文本
-        context = random.choice(json.loads(features['texts']))
+        caption = random.choice(json.loads(features['texts']))
         src_candidate = [
-            f" \n#instruction: which region does the context describe? \n#context: \"{context}\"",
+            f" \n#instruction: describe the region with a phrase.\n#region: {sbbox}",
+        ]
+        tgt_candidate = [
+            f" {caption}",
+        ]
+        weights = [1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+    
+    @staticmethod
+    def refcoco_grounding(features, style=None):
+        """ 任务数据集：Grounding """
+        # 处理图片
+        image = features['image']
+        # 处理bbox
+        bbox = features['bbox']
+        sbbox = bbox_to_sbbox(bbox, *image.size)
+        # 处理文本
+        caption = random.choice(json.loads(features['texts']))
+        context = f"human: {caption}"
+        src_candidate = [
+            f" \n#instruction: which region does the context describe?\n#context: {caption}",
+            f" \n#instruction: which region does the context describe? {caption}",
         ]
         tgt_candidate = [
             f" region: {sbbox}",
+            f" region: {sbbox}",
         ]
-        style = 0
+        weights = [0.3, 0.7]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -104,39 +132,36 @@ class MapFunc():
 ## ====== visdial ======
 
     @staticmethod
-    def visdial_question(features, weights=None):
+    def visdial_question(features, style=None):
         """ question_invig """
         # 处理图片
         image = features['image']
         # 处理文本
-        caption = features['caption']
         dialog = json.loads(features['dialog'])
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
-        context = [f"query: let's talk about the picture."]
+        context = []
         for t in range(turn-1):
-            context += [f"question: {dialog[t][0]}?"]
-            context += [f"answer: {dialog[t][1]}."]
+            context += [f"agent: {dialog[t][0]}?"]  # question
+            context += [f"human: {dialog[t][1]}."]  # answer
         context = " ".join(context)
+        # caption = features['caption']
         question = dialog[turn-1][0]
         
         src_candidate = [
-            f" \n#instruction: ask a question. \n#caption: \"{caption}.\"\n#context: \"{context}\"",
-            f" \n#instruction: ask a question. \n#context: \"{context}\"",
+            f" \n#instruction: any questions about this picture?\n#context: \"{context}\"",
         ]
         tgt_candidate = [
             f" {question}",
-            f" {question}",
         ]
-        if weights is None:
-            weights = [0.3, 0.7]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and question and len(dialog) >= 2
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
     
     @staticmethod
-    def visdial_answer(features, weights=None):
+    def visdial_answer(features, style=None):
         """ answer_invig """
         # 处理图片
         image = features['image']
@@ -146,33 +171,49 @@ class MapFunc():
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = [f"query: let's talk about the picture."]
         for t in range(turn-1):
-            context += [f"question: {dialog[t][0]}?"]
-            context += [f"answer: {dialog[t][1]}."]
+            context += [f"human: {dialog[t][0]}?"]
+            context += [f"agent: {dialog[t][1]}."]
         context = " ".join(context)
         question = dialog[turn-1][0]
         answer = dialog[turn-1][1]
-
-        short_or_detail = "briefly" if len(answer) < 20 else "in detail"
         src_candidate = [
-            f" \n#instruction: answer the question {short_or_detail}. \n#caption: \"{caption}.\"\n#context: \"{context}\"\n#question: \"{question}\"",
-            f" \n#instruction: answer the question {short_or_detail}. \n#context: \"{context}\"\n#question: \"{question}\"",
+            f" \n#instruction: {question}\n#context: \"{context}\"",
         ]
         tgt_candidate = [
             f" {answer}",
-            f" {answer}",
         ]
-        if weights is None:
-            weights = [0.3, 0.7]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and question and answer
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+    
+    @staticmethod
+    def visdial_caption(features, style=None):
+        """ answer_invig """
+        # 处理图片
+        image = features['image']
+        # 处理文本
+        caption = features['caption']
+        src_candidate = [
+            f" \n#instruction: what does the image show?",
+            f" \n#instruction: can you describe the image?",
+        ]
+        tgt_candidate = [
+            f" {caption}",
+            f" {caption}",
+        ]
+        weights = [0.5, 0.5]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
 
 ## ====== invig ======
 
     @staticmethod
-    def invig_question(features):
+    def invig_question(features, style=None):
         """ question_invig """
         # 处理图片
         image = features.get('image', None)
@@ -185,18 +226,17 @@ class MapFunc():
         turn = random.randint(2, max(2, turn_right))  # 选一个轮数，来作为tgt_text
         context = [f"query: {dialog[0][1]}"]
         for t in range(1, turn-1):
-            context += [f"question: {dialog[t][0]}"]
-            context += [f"answer: {dialog[t][1]}"]
-        context = " ".join(context)
+            context += [f"agent: {dialog[t][0]}"]  # question
+            context += [f"human: {dialog[t][1]}"]  # answer
         question = dialog[turn-1][0]
+        answer = f"{context[-1]} " if len(context) and random.random() > 0.5 else ""
+        context = " ".join(context)
         
         src_candidate = [
-            f" \n#instruction: ask a question. \n#context: \"{context}\"",
-            f" \n#instruction: ask a new question. \n#context: \"{context}\"",
-            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+            f" \n#instruction: ask a new question to guess what i want in this picture.\n#context: \"{context}\"",
+            f" \n#instruction: {answer}can you specify which region the context describes?\n#context: \"{context}\"",
         ]
         tgt_candidate = [
-            f" {question}",
             f" {question}",
             f" not yet. {question}"
         ]
@@ -204,14 +244,14 @@ class MapFunc():
             weights = [9, 0, 1]
         else:
             weights = [4, 5, 1]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and question and len(dialog) >= 2
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
     
     @staticmethod
-    def invig_answer(features, weights=None):
+    def invig_answer(features, style=None):
         """ answer_invig """
         # 处理图片
         image = features['image']
@@ -224,30 +264,31 @@ class MapFunc():
         turn = random.randint(2, max(2, turn_right))  # 选一个轮数，来作为tgt_text
         context = [f"query: {dialog[0][1]}"]
         for t in range(1, turn-1):
-            context += [f"question: {dialog[t][0]}"]
-            context += [f"answer: {dialog[t][1]}"]
+            context += [f"human: {dialog[t][0]}"]  # question
+            context += [f"agent: {dialog[t][1]}"]  # answer
         context = " ".join(context)
         question = dialog[turn-1][0]
         answer = dialog[turn-1][1]
 
         src_candidate = [
-            f" \n#instruction: answer the question according to the region. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
-            f" \n#instruction: say a word about the region. \n#region: {sbbox}",
+            f" \n#instruction: answer the question based on the region. {question}\n#region: {sbbox}\n#context: \"{context}\"",
+            f" \n#instruction: {question}\n#region: {sbbox}\n#context: \"{context}\"",
+            f" \n#instruction: what do you think of the region in the picture?\n#region: {sbbox}",
         ]
         tgt_candidate = [
             f" {answer}",
+            f" {answer}",
             f" {dialog[0][1]}",
         ]
-        if weights is None:
-            weights = [8, 2]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [5, 2, 3]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and question and answer
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
     
     @staticmethod
-    def invig_grounding(features, weights=None, test=False):
+    def invig_grounding(features, style=None):
         """ grounding_invig """
         # 处理图片
         image = features['image']
@@ -258,21 +299,19 @@ class MapFunc():
         dialog = json.loads(features['dialog'])
         context = [f"query: {dialog[0][1]}"]
         for t in range(1, len(dialog)):
-            context += [f"question: {dialog[t][0]}"]
-            context += [f"answer: {dialog[t][1]}"]
+            context += [f"agent: {dialog[t][0]}"]  # question
+            context += [f"human: {dialog[t][1]}"]  # answer
         context = " ".join(context)
         src_candidate = [
-            f" \n#instruction: which region does the context describe? \n#context: \"{context}\"",
-            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+            f" \n#instruction: which region does the context describe?\n#context: \"{context}\"",
+            f" \n#instruction: can you specify which region the context describes?\n#context: \"{context}\"",
         ]
         tgt_candidate = [
             f" region: {sbbox}",
             f" sure. region: {sbbox}",
         ]
-        if weights is None:
-            weights = [9, 1]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
-        # style = 0 if test else style
+        weights = [7, 3]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and sbbox
@@ -281,7 +320,7 @@ class MapFunc():
 ## ====== guesswhat ======
     
     @staticmethod
-    def guesswhat_question(features):
+    def guesswhat_question(features, style=None):
         """ question_invig """
         # 处理图片
         image = features['image']
@@ -293,33 +332,29 @@ class MapFunc():
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = [f"query: guess what i want."]
         for t in range(turn-1):
-            context += [f"question: {dialog[t][0]}"]
-            context += [f"answer: {dialog[t][1]}"]
-        context = " ".join(context)
+            context += [f"agent: {dialog[t][0]}"]  # question
+            context += [f"human: {dialog[t][1]}"]  # answer
         question = dialog[turn-1][0]
+        answer = f"{context[-1]} " if len(context) and random.random() > 0.5 else ""
+        context = " ".join(context)
         
         src_candidate = [
-            f" \n#instruction: ask a question. \n#context: \"{context}\"",
-            f" \n#instruction: ask a new question. \n#context: \"{context}\"",
-            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+            f" \n#instruction: {answer}ask a closed-ended question to guess what i want in this picture.\n#context: \"{context}\"",
+            f" \n#instruction: {answer}can you specify which region the context describes?\n#context: \"{context}\"",
         ]
         tgt_candidate = [
             f" {question}",
-            f" {question}",
             f" not yet. {question}"
         ]
-        if turn <= 3:
-            weights = [9, 0, 1]
-        else:
-            weights = [4, 5, 1]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [7, 3]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and question and len(dialog) >= 1, f"{image}, {question}, {len(dialog)}"
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
     
     @staticmethod
-    def guesswhat_answer(features, weights=None):
+    def guesswhat_answer(features, style=None):
         """ answer_invig """
         # 处理图片
         image = features['image']
@@ -331,30 +366,30 @@ class MapFunc():
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
         context = [f"query: guess what i want."]
         for t in range(turn-1):
-            context += [f"question: {dialog[t][0]}"]
-            context += [f"answer: {dialog[t][1]}"]
+            context += [f"human: {dialog[t][0]}"]  # question
+            context += [f"agent: {dialog[t][1]}"]  # answer
         context = " ".join(context)
         question = dialog[turn-1][0]
         answer = dialog[turn-1][1]
+        based_on_the_region = "based on the region " if random.random() > 0.5 else ""
 
         src_candidate = [
-            f" \n#instruction: answer the question with yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
-            f" \n#instruction: answer the question with a simple yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
+            f" \n#instruction: answer the question {based_on_the_region}with yes or no. {question}\n#region: {sbbox}\n#context: \"{context}\"",
+            f" \n#instruction: {question} yes or no?\n#region: {sbbox}\n#context: \"{context}\"",
         ]
         tgt_candidate = [
             f" {answer}",
             f" {answer}",
         ]
-        if weights is None:
-            weights = [8, 2]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [7, 3]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and question and answer
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
     
     @staticmethod
-    def guesswhat_grounding(features, weights=None):
+    def guesswhat_grounding(features, style=None):
         """ grounding_invig """
         # 处理图片
         image = features['image']
@@ -365,20 +400,19 @@ class MapFunc():
         dialog = json.loads(features['dialog'])
         context = [f"query: guess what i want."]
         for t in range(0, len(dialog)):
-            context += [f"question: {dialog[t][0]}"]
-            context += [f"answer: {dialog[t][1]}"]
+            context += [f"agent: {dialog[t][0]}"]  # question
+            context += [f"human: {dialog[t][1]}"]  # answer
         context = " ".join(context)
         src_candidate = [
-            f" \n#instruction: which region does the context describe? \n#context: \"{context}\"",
-            f" \n#instruction: can you specify which region the context describes? \n#context: \"{context}\"",
+            f" \n#instruction: which region does the context describe?\n#context: \"{context}\"",
+            f" \n#instruction: can you specify which region the context describes?\n#context: \"{context}\"",
         ]
         tgt_candidate = [
             f" region: {sbbox}",
             f" sure. region: {sbbox}",
         ]
-        if weights is None:
-            weights = [9, 1]
-        style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [9, 1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         assert image and sbbox
@@ -480,9 +514,8 @@ class MapFunc():
             f" there are {num} {c}.\n" + "\n".join([f"- region: {sbbox}" for sbbox in sbboxes]),
             f" there is no {false_c}.",
         ]
-        if style is None:
-            weights = [2, 2, 4, 2, 1]
-            style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [2, 2, 3, 2, 1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -496,14 +529,129 @@ class MapFunc():
         caption = features.get('caption')
         # 处理文本
         src_candidate = [
-            f" \n#instruction: what does the image descript?",
+            f" \n#instruction: what does the image describe?",
         ]
         tgt_candidate = [
             f" {caption}",
         ]
-        if style is None:
-            weights = [1]
-            style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        weights = [1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+
+## ====== llava_instruct_150k ======
+
+    @staticmethod
+    def llava_instruct_150k(features, style=None):
+        """ answer_invig """
+        # 处理图片
+        image = features['image']
+        # 处理文本
+        dialog = features['conversations']
+        turn = random.randint(1, len(dialog)//2)
+        context = []
+        for i in range(turn-1):
+            assert dialog[i*2]['from'] == 'human'
+            context += ['human: ' + dialog[i*2]['value'].replace('<image>\n', '')]
+            context += ['agent: ' + dialog[i*2+1]['value']]
+        context = " ".join(context)
+        question = dialog[(turn-1)*2]['value'].replace('<image>\n', '')
+        answer = dialog[(turn-1)*2+1]['value']
+
+        src_candidate = [
+            f" \n#instruction: {question}\n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+        ]
+        weights = [1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+
+## ====== llava_conversation_58k ======
+
+    @staticmethod
+    def llava_conversation_58k(features, style=None):
+        """ answer_invig """
+        # 处理图片
+        image = features['image']
+        # 处理文本
+        dialog = features['conversations']
+        turn = random.randint(1, len(dialog)//2)
+        context = []
+        for i in range(turn-1):
+            assert dialog[i*2]['from'] == 'human'
+            context += ['human: ' + dialog[i*2]['value']]
+            context += ['agent: ' + dialog[i*2+1]['value']]
+        context = " ".join(context).replace('<image>\n', '')
+        question = dialog[(turn-1)*2]['value'].replace('<image>\n', '')
+        answer = dialog[(turn-1)*2+1]['value'].replace('<image>\n', '')
+
+        src_candidate = [
+            f" \n#instruction: {question}\n#context: \"{context}\"",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+        ]
+        weights = [1]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+
+## ====== llava_complex_reasoning_77k ======
+
+    @staticmethod
+    def llava_complex_reasoning_77k(features, style=None):
+        """ answer_invig """
+        # 处理图片
+        image = features['image']
+        # 处理文本
+        dialog = features['conversations']
+        question = dialog[0]['value'].replace('<image>\n', '')
+        answer = dialog[1]['value'].replace('<image>\n', '')
+        step_by_step = " let's think step by step." if len(answer) > 120 else ""
+
+        src_candidate = [
+            f" \n#instruction: {question}",
+            f" \n#instruction: {question}{step_by_step}",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+            f" {answer}",
+        ]
+        weights = [0.5, 0.5]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+
+## ====== llava_detail_23k ======
+
+    @staticmethod
+    def llava_detail_23k(features, style=None):
+        """ answer_invig """
+        # 处理图片
+        image = features['image']
+        # 处理文本
+        dialog = features['conversations']
+        question = dialog[0]['value'].replace('<image>\n', '')
+        answer = dialog[1]['value'].replace('<image>\n', '')
+        in_detail = " Please provide a detailed description." if len(answer) > 100 else ""
+
+        src_candidate = [
+            f" \n#instruction: {question}",
+            f" \n#instruction: {question}{in_detail}",
+        ]
+        tgt_candidate = [
+            f" {answer}",
+            f" {answer}",
+        ]
+        weights = [0.5, 0.5]
+        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}

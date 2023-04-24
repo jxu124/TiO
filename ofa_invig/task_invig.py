@@ -102,6 +102,29 @@ class OFADataset(FairseqDataset):  # ~OFADataset
         return collate_fn(samples)
 
 
+class IterDatasetWrap(torch.utils.data.Dataset):
+    def __init__(self, cfg, split="train"):
+        self.ids = datasets.load_dataset(cfg['path'], streaming=True)[split]
+        self.ids = datasets.distributed.split_dataset_by_node(self.ids, 0, 8)
+        self.task = cfg['tasks'][0]
+        self.n_samples = cfg['n_samples'] // 8
+        self.it = None
+
+    def __getitem__(self, idx):
+        try:
+            data = next(self.it)
+        except:
+            self.it = iter(self.ids)
+            data = next(self.it)
+        return getattr(MapFunc, self.task)(MapFunc.load_image(data))
+    
+    def set_epoch(self, epoch):
+        self.ids.set_epoch(epoch)
+    
+    def __len__(self):
+        return self.n_samples
+
+
 @register_task("invig", dataclass=InvigConfig)
 class InvigTask(OFATask):
     def __init__(self, cfg: InvigConfig, src_dict, tgt_dict):
@@ -132,11 +155,9 @@ class InvigTask(OFATask):
         tasks = [i[1] for i in datasets_collection]
         use_datasets = [i[2] for i in datasets_collection]
         probs = np.asarray([i[3] for i in datasets_collection])
-        probs = probs / probs.sum()
         counts = np.asarray([len(ds) for ds in use_datasets])
-        total_count = np.min(counts / probs) // 4096 * 4096 if split == 'train' else 1024
-        # total_count = 4096 if split == 'train' else 1024
-        n_samples = (total_count * probs).astype(int)
+        n_samples = (probs * counts).astype(int)
+        total_count = sum(n_samples) // 2048 * 2048 if split == 'train' else 2048
         n_samples[-1] = total_count - sum(n_samples[:-1])
         use_datasets = [ds.shuffle().select(range(n)) for ds, n in zip(use_datasets, n_samples)]
 

@@ -12,3 +12,12 @@
 python3 src/bench_oracle_guesswhat.py -c "/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_4_21000.pt"
 python3 src/bench_grounding_guesswhat.py -c "/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_4_21000.pt"
 
+### 指令
+```
+#instruction: human: 
+#context:
+#region:
+
+其中：AI以agent自称，人类为huamn
+```
+
