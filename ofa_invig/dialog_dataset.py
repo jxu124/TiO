@@ -486,6 +486,27 @@ class MapFunc():
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+    
+## ====== cc_sbu_align ======
+
+    @staticmethod
+    def cc_sbu_align_caption(features, style=None):
+        """ 任务数据集：Grounding """
+        image = features['image']
+        caption = features.get('caption')
+        # 处理文本
+        src_candidate = [
+            f" \n#instruction: what does the image descript?",
+        ]
+        tgt_candidate = [
+            f" {caption}",
+        ]
+        if style is None:
+            weights = [1]
+            style = random.choices(range(len(src_candidate)), weights=weights)[0]
+        src_text = src_candidate[style].lower()
+        tgt_text = tgt_candidate[style].lower()
+        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
 
 ## ====== end of TaskProcess ======
 
