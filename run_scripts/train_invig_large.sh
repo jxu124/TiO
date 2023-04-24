@@ -1,8 +1,8 @@
 #!/usr/bin/env
 
 # ==== 基本参数 ====
-num_gpus=1
-PATH_D_INVIG=/mnt/bn/hri-lq/projects/OFA-Invig
+num_gpus=8
+PATH_D_INVIG=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig
 PATH_D_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
 PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 
@@ -19,8 +19,8 @@ selected_cols=0
 python3 -c "from g2p_en import G2p"
 
 # ==== 日志参数 ====
-log_dir=${PATH_D_LOG}/invig_large_grounding_logs_debug
-save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints_debug
+log_dir=${PATH_D_LOG}/invig_large_grounding_logs
+save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
 user_dir=${PATH_D_INVIG}/ofa_invig
@@ -36,7 +36,7 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=3
+batch_size=14
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
@@ -52,7 +52,7 @@ num_bins=1000
 
 subfix=`date "+%Y%m%d-%H%M"`
 
-for max_epoch in 10; do
+for max_epoch in 20; do
   echo "max_epoch "${max_epoch}
   for lr in 3e-5; do
     echo "lr "${lr}
@@ -66,7 +66,7 @@ for max_epoch in 10; do
 
       # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
       # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
-      python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} --use_env ${PATH_D_OFA}/train.py \
+      python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
           --bpe-dir=${bpe_dir} \
@@ -97,7 +97,7 @@ for max_epoch in 10; do
           --max-epoch=${max_epoch} --warmup-ratio=${warmup_ratio} \
           --log-format=simple --log-interval=10 \
           --fixed-validation-seed=7 \
-          --no-epoch-checkpoints --keep-best-checkpoints=2 \
+          --no-epoch-checkpoints --keep-best-checkpoints=1 \
           --save-interval=1 --validate-interval=1 \
           --save-interval-updates=1000 --validate-interval-updates=1000 \
           --eval-acc \
@@ -116,7 +116,7 @@ for max_epoch in 10; do
           --fp16 \
           --fp16-scale-window=512 \
           --eval-print-samples \
-          --num-workers=4 > ${log_file} 2>&1
+          --num-workers=2 > ${log_file} 2>&1
     done
   done
 done

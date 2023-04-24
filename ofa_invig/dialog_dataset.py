@@ -496,7 +496,7 @@ class DataCollatorForOFA(transformers.DataCollatorForSeq2Seq):
     image_processor: Optional[Any] = None
     padding: Optional[str] = "longest"
     max_src_length: Optional[int] = 256
-    max_tgt_length: Optional[int] = 128
+    max_tgt_length: Optional[int] = 64  # 128
     return_tensors: Optional[str] = "pt"
     
     def __call__(self, features, return_tensors=None):

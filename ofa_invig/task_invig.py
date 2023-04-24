@@ -12,6 +12,7 @@ from argparse import Namespace
 from tqdm import tqdm
 from omegaconf import DictConfig
 import numpy as np
+import random
 
 # fairseq的模块
 from fairseq import metrics
@@ -73,44 +74,28 @@ from fairseq.data import FairseqDataset
         
 # iterable 数据集：包装为普通数据集
 
-import bisect
 import argparse
-class OFADataset(torch.utils.data.ConcatDataset, FairseqDataset):  # ~OFADataset
-    def __init__(self, datasets, tasks=None, tokenizer=None, image_processor=None):
+class OFADataset(FairseqDataset):  # ~OFADataset
+    def __init__(self, ds, tokenizer=None, image_processor=None):
         _, rank, world_size = world_info_from_env()
-        total_count = sum([len(ds) for ds in datasets])
-        self.ds_list = [split_dataset_by_node(ds, rank, world_size) for ds in datasets]
+        total_count = len(ds)
+        self.ds = split_dataset_by_node(ds, rank, world_size)
         self.dataset = argparse.Namespace(**{'get_total_row_count': lambda: total_count, "_seek": lambda offset=0: None})
-        super().__init__(self.ds_list)
-        self.tasks = tasks
         self.tokenizer, self.image_processor = tokenizer, image_processor
 
     def __getitem__(self, idx):
-        if idx < 0:
-            if -idx > len(self):
-                raise ValueError("absolute value of index should not exceed dataset length")
-            idx = len(self) + idx
-        dataset_idx = bisect.bisect_right(self.cumulative_sizes, idx)
-        if dataset_idx == 0:
-            sample_idx = idx
-        else:
-            sample_idx = idx - self.cumulative_sizes[dataset_idx - 1]
-        data = self.datasets[dataset_idx][sample_idx]
-        if self.tasks is not None:
-            return getattr(MapFunc, self.tasks[dataset_idx])(MapFunc.load_image(data))
-        else:
-            return MapFunc.load_image(data)
+        data = self.ds[idx]
+        return getattr(MapFunc, data['__task__'])(MapFunc.load_image(data))
     
     def __len__(self):
-        return super().__len__()
+        return len(self.ds)
 
     def set_epoch(self, epoch):
         super().set_epoch(epoch)
-        for ds in self.ds_list:
-            if hasattr(ds, "shuffle"):
-                ds.shuffle(epoch)
-            elif hasattr(ds, "set_epoch"):
-                ds.set_epoch(epoch)
+        if hasattr(self.ds, "set_epoch"):
+            self.ds.set_epoch(epoch)
+        elif hasattr(self.ds, "shuffle"):
+            self.ds.shuffle(epoch)
 
     def collater(self, samples, pad_to_length=None):
         collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
@@ -123,6 +108,7 @@ class InvigTask(OFATask):
         super().__init__(cfg, src_dict, tgt_dict)
 
         self.processor = get_processor(resolution=512)
+        datasets.disable_progress_bar()
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
         # paths = self.cfg.data.split(',')
@@ -137,26 +123,30 @@ class InvigTask(OFATask):
             name = i['name']
             logger.info(f"loading {name}-{_split} from {i['path']}")
             ds = datasets.load_from_disk(i['path'])[_split]
-            ds = ds.filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
             for task, prob in zip(i['tasks'], i['probs']):
-                datasets_collection += [(name, task, ds, prob)]
+                ds_task = ds.add_column("__task__", [task]*len(ds))\
+                            .filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
+                datasets_collection += [(name, task, ds_task, prob)]
 
         # 2 按照比例组合数据
+        tasks = [i[1] for i in datasets_collection]
         use_datasets = [i[2] for i in datasets_collection]
         probs = np.asarray([i[3] for i in datasets_collection])
         probs = probs / probs.sum()
         counts = np.asarray([len(ds) for ds in use_datasets])
-        total_count = np.min(counts / probs) if split == 'train' else 1024
+        total_count = np.min(counts / probs) // 4096 * 4096 if split == 'train' else 1024
+        # total_count = 4096 if split == 'train' else 1024
         n_samples = (total_count * probs).astype(int)
-        use_datasets = [ds.shuffle(keep_in_memory=True).select(range(n)) for ds, n in zip(use_datasets, n_samples)]
-        tasks = [i[1] for i in datasets_collection]
+        n_samples[-1] = total_count - sum(n_samples[:-1])
+        use_datasets = [ds.shuffle().select(range(n)) for ds, n in zip(use_datasets, n_samples)]
 
         # 3 构造fairseq_dataset，送进去预处理函数
-        dataset = OFADataset(use_datasets, tasks, *self.processor)
+        dataset = datasets.concatenate_datasets(use_datasets)
+        dataset = OFADataset(dataset, *self.processor)
         self.datasets[split] = dataset
 
         # 4 打印logs
-        logger.info(f"load {split} data: {len(use_datasets)} ({len(dataset)} samples) dataset(s)")
+        logger.info(f"load {split} data: {len(use_datasets)} ({len(dataset)}/{total_count} samples) dataset(s)")
         logger.info("Tasks: " + ", ".join([f'{t}({n})' for t, n in zip(tasks, n_samples)]))
 
     def build_model(self, cfg):

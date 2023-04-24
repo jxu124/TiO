@@ -1,7 +1,7 @@
 
 env:
     path_ofa: "/mnt/bn/hri-lq/projects/VLDD/OFA"
-    path_invig: "/mnt/bn/hri-lq/projects/OFA-Invig"
+    path_invig: "/mnt/bn/hri-lq/projects/VLDD/OFA-Invig"
     path_tokenizer: "/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/hf/ofa-large"
     path_images:
       coco: "/mnt/bn/hri-lq/datasets/images/coco"

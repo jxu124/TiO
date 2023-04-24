@@ -12,7 +12,10 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 
-from .ofa.tokenization_ofa import OFATokenizer
+try:
+    from transformers import OFATokenizer
+except:
+    from .ofa.tokenization_ofa import OFATokenizer
 
 # ========== logger ==========
 
