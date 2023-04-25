@@ -65,19 +65,18 @@ def sbbox_to_bbox_legacy(sbbox, w=None, h=None, num_bins=1000, strict=False):
 
 
 def sbbox_to_bbox(sbbox, w=None, h=None, num_bins=1000, strict=False):
-    text = sbbox
-    text = text.split("region: ")
-    text = [i.split('<bin_')[1:5] for i in text if i.startswith('<bin_')]
-    text = [[j.replace(">", "").strip('\n- ') for j in i] for i in text]
-    bbox = np.array(text, dtype=int) / num_bins
+    patten = re.compile(r"<bin_(\d+)> <bin_(\d+)> <bin_(\d+)> <bin_(\d+)>")
+    ret = [re.match(patten, item) for item in sbbox.split("region: ")]
+    ret = [[i.group(1), i.group(2), i.group(3), i.group(4)] for i in ret if i != None]
+    bbox = np.array(ret, dtype=int) / num_bins
     if not strict and bbox.size == 0:
-        bbox = np.array([0, 0, 1, 1])
+        bbox = np.array([[0, 0, 1, 1]])
     bbox = np.clip(bbox, 1e-3, 1 - 1e-3)
     if w is not None and h is not None: 
         bbox = bbox * np.array([w, h, w, h])
     return bbox
-
     
+
 def bbox_to_sbbox(bbox, w=None, h=None, num_bins=1000):
     """ This function converts a dense bounding box (bbox) to a string bounding box (sbbox). """
     if w is not None and h is not None:
