@@ -226,7 +226,7 @@ class MapFunc():
             f" {question}",
             f" not yet. {question}"
         ]
-        weights = [7, 3]
+        weights = [9, 1]
         style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
@@ -293,7 +293,7 @@ class MapFunc():
             f" region: {sbbox}",
             f" sure. region: {sbbox}",
         ]
-        weights = [7, 3]
+        weights = [9, 1]
         style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
@@ -329,7 +329,7 @@ class MapFunc():
             f" {question}",
             f" not yet. {question}"
         ]
-        weights = [7, 3]
+        weights = [9, 1]
         style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
@@ -403,59 +403,59 @@ class MapFunc():
 
 ## ====== ofa tasks ======
 
-    @staticmethod
-    def invig_grounding_ofa(features, weights=None):
-        """ grounding_invig """
-        # 处理图片
-        image = features['image']
-        # 处理bbox
-        bbox = features['bbox']
-        sbbox = bbox_to_sbbox(bbox, *image.size)
-        # 处理文本
-        dialog = json.loads(features['dialog'])
-        context = [f"query: {dialog[0][1]}"]
-        for t in range(1, len(dialog)):
-            context += [f"question: {dialog[t][0]}"]
-            context += [f"answer: {dialog[t][1]}"]
-        context = " ".join(context)
-        src_candidate = [
-            f" which region does the text \" {context} \" describe?",
-        ]
-        tgt_candidate = [
-            f" {sbbox}",
-        ]
-        style = 0
-        src_text = src_candidate[style].lower()
-        tgt_text = tgt_candidate[style].lower()
-        assert image and sbbox
-        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+    # @staticmethod
+    # def invig_grounding_ofa(features, weights=None):
+    #     """ grounding_invig """
+    #     # 处理图片
+    #     image = features['image']
+    #     # 处理bbox
+    #     bbox = features['bbox']
+    #     sbbox = bbox_to_sbbox(bbox, *image.size)
+    #     # 处理文本
+    #     dialog = json.loads(features['dialog'])
+    #     context = [f"query: {dialog[0][1]}"]
+    #     for t in range(1, len(dialog)):
+    #         context += [f"question: {dialog[t][0]}"]
+    #         context += [f"answer: {dialog[t][1]}"]
+    #     context = " ".join(context)
+    #     src_candidate = [
+    #         f" which region does the text \" {context} \" describe?",
+    #     ]
+    #     tgt_candidate = [
+    #         f" {sbbox}",
+    #     ]
+    #     style = 0
+    #     src_text = src_candidate[style].lower()
+    #     tgt_text = tgt_candidate[style].lower()
+    #     assert image and sbbox
+    #     return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
 
-    @staticmethod
-    def guesswhat_answer_oracle(features, weights=None):
-        """ answer_invig """
-        # 处理图片
-        image = features['image']
-        # 处理bbox
-        bbox = features['bbox']
-        sbbox = bbox_to_sbbox(bbox, *image.size)
-        # 处理文本
-        dialog = json.loads(features['dialog'])
-        turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
-        context = f"query: guess what i want."
-        question = dialog[turn-1][0]
-        answer = dialog[turn-1][1]
+    # @staticmethod
+    # def guesswhat_answer_oracle(features, weights=None):
+    #     """ answer_invig """
+    #     # 处理图片
+    #     image = features['image']
+    #     # 处理bbox
+    #     bbox = features['bbox']
+    #     sbbox = bbox_to_sbbox(bbox, *image.size)
+    #     # 处理文本
+    #     dialog = json.loads(features['dialog'])
+    #     turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
+    #     context = f"query: guess what i want."
+    #     question = dialog[turn-1][0]
+    #     answer = dialog[turn-1][1]
 
-        src_candidate = [
-            f" \n#instruction: answer the question with yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
-        ]
-        tgt_candidate = [
-            f" {answer}",
-        ]
-        style = 0
-        src_text = src_candidate[style].lower()
-        tgt_text = tgt_candidate[style].lower()
-        assert image and question and answer
-        return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
+    #     src_candidate = [
+    #         f" \n#instruction: answer the question with yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
+    #     ]
+    #     tgt_candidate = [
+    #         f" {answer}",
+    #     ]
+    #     style = 0
+    #     src_text = src_candidate[style].lower()
+    #     tgt_text = tgt_candidate[style].lower()
+    #     assert image and question and answer
+    #     return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
 
 ## ====== objects365 ======
 

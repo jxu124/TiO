@@ -163,6 +163,7 @@ class InvigTask(OFATask):
         n_samples = (probs * counts).astype(int)
         total_count = sum(n_samples) // 2048 * 2048 if split == 'train' else 2048
         n_samples[-1] = total_count - sum(n_samples[:-1])
+        # DEBUG: n_samples = [256] * len(n_samples)
         use_datasets = [ds.shuffle().select(range(n)) for ds, n in zip(use_datasets, n_samples)]
 
         # 3 构造fairseq_dataset，送进去预处理函数
