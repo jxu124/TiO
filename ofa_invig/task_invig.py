@@ -65,6 +65,10 @@ class InvigConfig(OFAConfig):
     debug: Optional[bool] = field(
         default=False, metadata={"help": "debug mode"}
     )
+    config_yaml: Optional[str] = field(
+        default="/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_env.yml", 
+        metadata={"help": "configure file"}
+    )
 
 
 # hack fairseq
@@ -129,8 +133,8 @@ class IterDatasetWrap(torch.utils.data.Dataset):
 class InvigTask(OFATask):
     def __init__(self, cfg: InvigConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
-
-        self.processor = get_processor(resolution=512)
+        MapFunc.load_config(self.cfg.config_yaml)
+        self.processor = get_processor(pretrain_path=MapFunc.cfg['env']['path_tokenizer'], resolution=512)
         datasets.disable_progress_bar()
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
@@ -207,8 +211,8 @@ class InvigTask(OFATask):
             import numpy as np
 
             sbbox_gen, sbbox_gt = self._inference(self.sequence_generator, sample, model)
-            bbox_gen = torch.Tensor(np.stack([sbbox_to_bbox(s) for s in sbbox_gen]))
-            bbox_gt = torch.Tensor(np.stack([sbbox_to_bbox(s) for s in sbbox_gt]))
+            bbox_gen = torch.Tensor(np.stack([sbbox_to_bbox(s).reshape(4) for s in sbbox_gen]))
+            bbox_gt = torch.Tensor(np.stack([sbbox_to_bbox(s).reshape(4) for s in sbbox_gt]))
             scores = self._calculate_ap_score(bbox_gen, bbox_gt)
             logging_output["_score_sum"] = scores.sum().item()
             logging_output["_score_cnt"] = scores.size(0)

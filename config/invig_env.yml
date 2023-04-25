@@ -3,6 +3,7 @@ env:
     path_ofa: "/mnt/bn/hri-lq/projects/VLDD/OFA"
     path_invig: "/mnt/bn/hri-lq/projects/VLDD/OFA-Invig"
     path_tokenizer: "/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/hf/ofa-large"
+    path_exclude_images: "/mnt/bn/hri-lq/datasets/hf-cache/test_images.json"
     path_images:
         coco: "/mnt/bn/hri-lq/datasets/images/coco"
         visdial: "/mnt/bn/hri-lq/datasets/images/visdial"
@@ -22,7 +23,7 @@ train:  # 目标1M
   - name: visdial  # 123k (103k)
     path: /mnt/bn/hri-lq/datasets/hf-cache/visdial
     tasks: ["visdial_question", "visdial_answer", "visdial_caption"]
-    probs: [1, 1, 0.3]
+    probs: [1, 1, 0.2]
   - name: refcoco  # 42k (31k)
     path: /mnt/bn/hri-lq/datasets/hf-cache/refcoco
     tasks: ["refcoco_grounding"]
@@ -39,12 +40,12 @@ train:  # 目标1M
     path: /mnt/bn/hri-lq/datasets/hf-cache/cc_sbu_align
     tasks: ["cc_sbu_align_caption"]
     probs: [1]
-  - name: "objects365"  # ??
-    path: "/mnt/bn/data-lq/datasets-hf/vision/objects365"
-    tasks: ["objects365_grounding"]
-    n_samples: 100_000
-    streaming: true
-    probs: [0.1]
+  # - name: "objects365"  # ??
+  #   path: "/mnt/bn/data-lq/datasets-hf/vision/objects365"
+  #   tasks: ["objects365_grounding"]
+  #   n_samples: 100_000
+  #   streaming: true
+  #   probs: [0.1]
   - name: "llava_instruct_150k"  # 150k (129k)
     path: "/mnt/bn/hri-lq/datasets/hf-cache/llava_instruct_150k"
     tasks: ["llava_instruct_150k"]
@@ -61,6 +62,10 @@ train:  # 目标1M
     path: "/mnt/bn/hri-lq/datasets/hf-cache/llava_detail_23k"
     tasks: ["llava_detail_23k"]
     probs: [0.7]
+  - name: "openaimges"  # 29k
+    path: "/mnt/bn/hri-lq/datasets/hf-cache/openimages_v1.2"
+    tasks: ['openimages_detection']
+    probs: [0.5]
 
 validation: 
   - name: "invig"  # 17652

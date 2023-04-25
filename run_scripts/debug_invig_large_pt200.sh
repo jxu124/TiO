@@ -2,7 +2,7 @@
 
 # ==== 基本参数 ====
 num_gpus=1
-PATH_D_INVIG=/mnt/bn/hri-lq/projects/OFA-Invig
+PATH_D_INVIG=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig
 PATH_D_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
 PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 
@@ -36,7 +36,7 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=3
+batch_size=2
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
@@ -101,7 +101,7 @@ for max_epoch in 10; do
           --save-interval=1 --validate-interval=1 \
           --save-interval-updates=1000 --validate-interval-updates=1000 \
           --eval-acc \
-          --eval-args='{"beam":5,"min_len":1,"max_len_a":0,"max_len_b":100}' \
+          --eval-args='{"beam":5,"min_len":1,"max_len_a":0,"max_len_b":40}' \
           --best-checkpoint-metric=score --maximize-best-checkpoint-metric \
           --max-src-length=${max_src_length} \
           --max-tgt-length=${max_tgt_length} \

@@ -1,18 +1,17 @@
 #!/usr/bin/env
 
 # ==== 基本参数 ====
-num_gpus=8
+num_gpus=1
 PATH_D_INVIG=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig
 PATH_D_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
 PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 
 # ==== 预训练模型 ====
-restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_huge.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_checkpoints/10_3e-5_512_20230424-2228/checkpoint_last.pt
+restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_large.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_last.pt  # best?
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_last.pt  # best?
 
 # ==== 训练数据 ====
 data="invig,invig"
@@ -20,8 +19,8 @@ selected_cols=0
 python3 -c "from g2p_en import G2p"
 
 # ==== 日志参数 ====
-log_dir=${PATH_D_LOG}/invig_huge_grounding_logs
-save_dir=${PATH_D_LOG}/invig_huge_grounding_checkpoints
+log_dir=${PATH_D_LOG}/invig_large_grounding_logs_debug
+save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints_debug
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
 user_dir=${PATH_D_INVIG}/ofa_invig
@@ -33,12 +32,12 @@ export MASTER_PORT=6051
 
 # ==== 模型参数 ====
 task=invig
-arch=ofa_huge
+arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=5
-update_freq=3
+batch_size=2
+update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
 decoder_drop_path_rate=0.2
@@ -67,7 +66,6 @@ for max_epoch in 10; do
 
       # torchrun --nnodes=1 --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
       # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
-      ## add --use_env for pt200
       python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
           $data \
           --selected-cols=${selected_cols} \
@@ -99,7 +97,7 @@ for max_epoch in 10; do
           --max-epoch=${max_epoch} --warmup-ratio=${warmup_ratio} \
           --log-format=simple --log-interval=10 \
           --fixed-validation-seed=7 \
-          --no-epoch-checkpoints --keep-best-checkpoints=2 \
+          --no-epoch-checkpoints --keep-best-checkpoints=1 \
           --save-interval=1 --validate-interval=1 \
           --save-interval-updates=1000 --validate-interval-updates=1000 \
           --eval-acc \
@@ -118,7 +116,7 @@ for max_epoch in 10; do
           --fp16 \
           --fp16-scale-window=512 \
           --eval-print-samples \
-          --num-workers=2 > ${log_file} 2>&1
+          --num-workers=4 > ${log_file} 2>&1
     done
   done
 done

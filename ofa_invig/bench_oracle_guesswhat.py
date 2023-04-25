@@ -56,8 +56,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ofa.evaluate")
 
-with open('/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_4ds.yml') as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
 
 
 # cast dataset for oracle testing
@@ -87,7 +85,6 @@ if __name__ == "__main__":
     main_args = parser.parse_args()
 
     # 1 load model
-    path_ckpt = "/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_4_21000.pt"
     path_ckpt = main_args.ckpt
     model = OFAModelWarper(path_ckpt, args.path_ofa, args.path_tokenizer)
     logger.info(f"Test Oracle Acc on {path_ckpt}")

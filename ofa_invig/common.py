@@ -1,10 +1,10 @@
 
 # builtin
+from typing import Optional, Any, Union, List
 import re
 import os
 import random
 import logging
-from typing import Optional, Any, Union, List
 
 # 3rd-part
 from PIL import Image, ImageFile
@@ -12,39 +12,22 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 
+# OFA
 try:
     from transformers import OFATokenizer
 except:
     from .ofa.tokenization_ofa import OFATokenizer
 
-# ========== logger ==========
 
+# ========== logger ==========
 logger = logging.getLogger(__name__)
 
 
 # ========== 预定义的一些参数 ==========
-mean = [0.5, 0.5, 0.5]
-std = [0.5, 0.5, 0.5]
-
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 ImageFile.MAX_IMAGE_PIXELS = None
 Image.MAX_IMAGE_PIXELS = None
 
-
-# # model warper
-# class OFAModelWarper(torch.nn.Module):
-#     def __init__(self, model):
-#         super().__init__()
-#         self.model = model
-        
-#     def forward(self, **batch):
-#         net_output = self.model(**batch['net_input'])
-#         lprobs = self.model.get_normalized_probs(net_output, log_probs=True)
-#         target = self.model.get_targets(batch, net_output)
-#         loss = torch.nn.functional.cross_entropy(lprobs.view(-1, 59457), target.view(-1), 
-#                                                  ignore_index=tokenizer.pad_token_id, reduction='mean', label_smoothing=0.1)
-#         return Seq2SeqLMOutput(loss=loss, logits=lprobs)
-    
 
 # ========== 预处理函数 ==========
 # 获得 tokenizer 和 image_processor
@@ -66,9 +49,7 @@ def get_processor(pretrain_path="/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/
 
 
 # ========== 工具函数 ==========
-
-# sbbox 转换 bbox
-def sbbox_to_bbox(sbbox, w=None, h=None, num_bins=1000, strict=False):
+def sbbox_to_bbox_legacy(sbbox, w=None, h=None, num_bins=1000, strict=False):
     """ This function converts a string bounding box (sbbox) to a dense bounding box (bbox). """
     res = re.match(r".*?<bin_([0-9]*)>[\ ]*<bin_([0-9]*)>[\ ]*<bin_([0-9]*)>[\ ]*<bin_([0-9]*)>.*", sbbox)
     if res is None:
@@ -82,10 +63,25 @@ def sbbox_to_bbox(sbbox, w=None, h=None, num_bins=1000, strict=False):
         bbox = bbox * np.array([w, h, w, h])
     return bbox
 
+
+def sbbox_to_bbox(sbbox, w=None, h=None, num_bins=1000, strict=False):
+    text = sbbox
+    text = text.split("region: ")
+    text = [i.split('<bin_')[1:5] for i in text if i.startswith('<bin_')]
+    text = [[j.replace(">", "").strip('\n- ') for j in i] for i in text]
+    bbox = np.array(text, dtype=int) / num_bins
+    if not strict and bbox.size == 0:
+        bbox = np.array([0, 0, 1, 1])
+    bbox = np.clip(bbox, 1e-3, 1 - 1e-3)
+    if w is not None and h is not None: 
+        bbox = bbox * np.array([w, h, w, h])
+    return bbox
+
     
-def bbox_to_sbbox(bbox, w, h, num_bins=1000):
+def bbox_to_sbbox(bbox, w=None, h=None, num_bins=1000):
     """ This function converts a dense bounding box (bbox) to a string bounding box (sbbox). """
-    bbox = np.asarray(bbox).reshape(4) / np.asarray([w, h, w, h])
+    if w is not None and h is not None:
+        bbox = np.asarray(bbox).reshape(4) / np.asarray([w, h, w, h])
     bbox = np.clip(bbox, 1e-3, 1 - 1e-3)
     quant_x0 = "<bin_{}>".format(int((bbox[0] * (num_bins - 1)).round()))
     quant_y0 = "<bin_{}>".format(int((bbox[1] * (num_bins - 1)).round()))
@@ -120,11 +116,11 @@ def world_info_from_env():
 
 
 class OFAModelWarper(torch.nn.Module):
-    def __init__(self, ckpt_path, ofa_path, tokenizer_path, resolution=512):
+    def __init__(self, ckpt_path, ofa_path, config_path, resolution=512):
         super().__init__()
         self.ckpt_path = ckpt_path
         self.ofa_path = ofa_path
-        self.tokenizer_path = tokenizer_path
+        self.config_path = config_path
         self.gens = self.load_from_pretrain(ckpt_path, ofa_path)
         _, self.model, _, task = self.gens
         self.tokenizer, self.image_processor = task.processor
