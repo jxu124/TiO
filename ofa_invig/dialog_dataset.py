@@ -79,7 +79,8 @@ class MapFunc():
         # 处理文本
         caption = random.choice(json.loads(features['texts']))
         src_candidate = [
-            f" \n#instruction: describe the region with a phrase.\n#region: {sbbox}",
+            f" \n#instruction: describe the region with a phrase.\n#context: \"\"\n#region: {sbbox}",
+            f" \n#instruction: describe the region briefly.\n#context: \"\"\n#region: {sbbox}",
         ]
         tgt_candidate = [
             f" {caption}",
@@ -103,7 +104,7 @@ class MapFunc():
         context = f"human: {caption}"
         src_candidate = [
             f" \n#instruction: which region does the context describe?\n#context: {caption}",
-            f" \n#instruction: which region does the context describe? {caption}",
+            f" \n#instruction: which region does the context describe? {caption}\n#context: \"\"",
         ]
         tgt_candidate = [
             f" region: {sbbox}",
@@ -130,7 +131,6 @@ class MapFunc():
             context += [f"agent: {dialog[t][0]}?"]  # question
             context += [f"human: {dialog[t][1]}."]  # answer
         context = " ".join(context)
-        # caption = features['caption']
         question = dialog[turn-1][0]
         
         src_candidate = [
@@ -183,8 +183,8 @@ class MapFunc():
         # 处理文本
         caption = features['caption']
         src_candidate = [
-            f" \n#instruction: what does the image show?",
-            f" \n#instruction: can you describe the image?",
+            f" \n#instruction: what does the image show?\n#context: \"\"",
+            f" \n#instruction: can you describe the image?\n#context: \"\"",
         ]
         tgt_candidate = [
             f" {caption}",
@@ -254,9 +254,9 @@ class MapFunc():
         answer = dialog[turn-1][1]
 
         src_candidate = [
-            f" \n#instruction: answer the question based on the region. {question}\n#region: {sbbox}\n#context: \"{context}\"",
-            f" \n#instruction: {question}\n#region: {sbbox}\n#context: \"{context}\"",
-            f" \n#instruction: what do you think of the region in the picture?\n#region: {sbbox}",
+            f" \n#instruction: answer the question based on the region. {question}\n#context: \"{context}\"\n#region: {sbbox}",
+            f" \n#instruction: {question}\n#context: \"{context}\"\n#region: {sbbox}",
+            f" \n#instruction: what do you think of the region in the picture?\n#context: \"\"\n#region: {sbbox}",
         ]
         tgt_candidate = [
             f" {answer}",
@@ -357,8 +357,8 @@ class MapFunc():
         based_on_the_region = "based on the region " if random.random() > 0.5 else ""
 
         src_candidate = [
-            f" \n#instruction: answer the question {based_on_the_region}with yes or no. {question}\n#region: {sbbox}\n#context: \"{context}\"",
-            f" \n#instruction: {question} yes or no?\n#region: {sbbox}\n#context: \"{context}\"",
+            f" \n#instruction: answer the question {based_on_the_region}with yes or no. {question}\n#context: \"{context}\"\n#region: {sbbox}",
+            f" \n#instruction: {question} yes or no?\n#context: \"{context}\"\n#region: {sbbox}",
         ]
         tgt_candidate = [
             f" {answer}",
@@ -401,62 +401,6 @@ class MapFunc():
         assert image and sbbox
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
 
-## ====== ofa tasks ======
-
-    # @staticmethod
-    # def invig_grounding_ofa(features, weights=None):
-    #     """ grounding_invig """
-    #     # 处理图片
-    #     image = features['image']
-    #     # 处理bbox
-    #     bbox = features['bbox']
-    #     sbbox = bbox_to_sbbox(bbox, *image.size)
-    #     # 处理文本
-    #     dialog = json.loads(features['dialog'])
-    #     context = [f"query: {dialog[0][1]}"]
-    #     for t in range(1, len(dialog)):
-    #         context += [f"question: {dialog[t][0]}"]
-    #         context += [f"answer: {dialog[t][1]}"]
-    #     context = " ".join(context)
-    #     src_candidate = [
-    #         f" which region does the text \" {context} \" describe?",
-    #     ]
-    #     tgt_candidate = [
-    #         f" {sbbox}",
-    #     ]
-    #     style = 0
-    #     src_text = src_candidate[style].lower()
-    #     tgt_text = tgt_candidate[style].lower()
-    #     assert image and sbbox
-    #     return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
-
-    # @staticmethod
-    # def guesswhat_answer_oracle(features, weights=None):
-    #     """ answer_invig """
-    #     # 处理图片
-    #     image = features['image']
-    #     # 处理bbox
-    #     bbox = features['bbox']
-    #     sbbox = bbox_to_sbbox(bbox, *image.size)
-    #     # 处理文本
-    #     dialog = json.loads(features['dialog'])
-    #     turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
-    #     context = f"query: guess what i want."
-    #     question = dialog[turn-1][0]
-    #     answer = dialog[turn-1][1]
-
-    #     src_candidate = [
-    #         f" \n#instruction: answer the question with yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\"",
-    #     ]
-    #     tgt_candidate = [
-    #         f" {answer}",
-    #     ]
-    #     style = 0
-    #     src_text = src_candidate[style].lower()
-    #     tgt_text = tgt_candidate[style].lower()
-    #     assert image and question and answer
-    #     return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
-
 ## ====== objects365 ======
 
     @staticmethod
@@ -486,11 +430,11 @@ class MapFunc():
         
         # 处理文本
         src_candidate = [
-            f" \n#instruction: point out the location of any {num_less} {c}.",
-            f" \n#instruction: point out the location of any {num_more} {c}.",
-            f" \n#instruction: where are {c} located?",
-            f" \n#instruction: how many {c} are there? where are they located?",
-            f" \n#instruction: how many {false_c} are there? where are they located?"
+            f" \n#instruction: point out the location of any {num_less} {c}.\n#context: \"\"",
+            f" \n#instruction: point out the location of any {num_more} {c}.\n#context: \"\"",
+            f" \n#instruction: where are {c} located?\n#context: \"\"",
+            f" \n#instruction: how many {c} are there? where are they located?\n#context: \"\"",
+            f" \n#instruction: how many {false_c} are there? where are they located?\n#context: \"\""
         ]
         tgt_candidate = [  # num_less
             f" there are {num} {c}. here are {num_less} of them.\n" + "\n".join([f"- region: {sbbox}" for sbbox in random.choices(sbboxes, k=num_less)]),
@@ -533,11 +477,11 @@ class MapFunc():
         
         # 处理文本
         src_candidate = [
-            f" \n#instruction: point out the location of any {num_less} {c}.",
-            f" \n#instruction: point out the location of any {num_more} {c}.",
-            f" \n#instruction: where are {c} located?",
-            f" \n#instruction: how many {c} are there? where are they located?",
-            f" \n#instruction: how many {false_c} are there? where are they located?"
+            f" \n#instruction: point out the location of any {num_less} {c}.\n#context: \"\"",
+            f" \n#instruction: point out the location of any {num_more} {c}.\n#context: \"\"",
+            f" \n#instruction: where are {c} located?\n#context: \"\"",
+            f" \n#instruction: how many {c} are there? where are they located?\n#context: \"\"",
+            f" \n#instruction: how many {false_c} are there? where are they located?\n#context: \"\""
         ]
         tgt_candidate = [  # num_less
             f" there are {num} {c}. here are {num_less} of them.\n" + "\n".join([f"- region: {sbbox}" for sbbox in random.choices(sbboxes, k=num_less)]),
@@ -561,7 +505,7 @@ class MapFunc():
         caption = features.get('caption')
         # 处理文本
         src_candidate = [
-            f" \n#instruction: what does the image describe?",
+            f" \n#instruction: what does the image describe?\n#context: \"\"",
         ]
         tgt_candidate = [
             f" {caption}",
@@ -648,8 +592,8 @@ class MapFunc():
         step_by_step = " let's think step by step." if len(answer) > 120 else ""
 
         src_candidate = [
-            f" \n#instruction: {question}",
-            f" \n#instruction: {question}{step_by_step}",
+            f" \n#instruction: {question}\n#context: \"\"",
+            f" \n#instruction: {question}{step_by_step}\n#context: \"\"",
         ]
         tgt_candidate = [
             f" {answer}",
@@ -672,11 +616,11 @@ class MapFunc():
         dialog = features['conversations']
         question = dialog[0]['value'].replace('<image>\n', '')
         answer = dialog[1]['value'].replace('<image>\n', '')
-        in_detail = " Please provide a detailed description." if len(answer) > 100 else ""
+        in_detail = " please be more detailed." if len(answer) > 100 else ""
 
         src_candidate = [
-            f" \n#instruction: {question}",
-            f" \n#instruction: {question}{in_detail}",
+            f" \n#instruction: {question}\n#context: \"\"",
+            f" \n#instruction: {question}{in_detail}\n#context: \"\"",
         ]
         tgt_candidate = [
             f" {answer}",
