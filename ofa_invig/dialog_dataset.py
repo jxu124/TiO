@@ -155,7 +155,7 @@ class MapFunc():
         caption = features['caption']
         dialog = json.loads(features['dialog'])
         turn = random.randint(1, len(dialog))  # 选一个轮数，来作为tgt_text
-        context = [f"query: let's talk about the picture."]
+        context = [f"agent: let's talk about the picture."]
         for t in range(turn-1):
             context += [f"human: {dialog[t][0]}?"]
             context += [f"agent: {dialog[t][1]}."]
