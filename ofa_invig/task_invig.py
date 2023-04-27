@@ -66,7 +66,7 @@ class InvigConfig(OFAConfig):
         default=False, metadata={"help": "debug mode"}
     )
     config_yaml: Optional[str] = field(
-        default="/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_env.yml", 
+        default="/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_env.yml",
         metadata={"help": "configure file"}
     )
 
@@ -74,8 +74,8 @@ class InvigConfig(OFAConfig):
 # hack fairseq
 from datasets import load_from_disk, Features, Value
 from fairseq.data import FairseqDataset
-        
-        
+
+
 # iterable 数据集：包装为普通数据集
 
 import argparse
@@ -90,7 +90,7 @@ class OFADataset(FairseqDataset):  # ~OFADataset
     def __getitem__(self, idx):
         data = self.ds[idx]
         return getattr(MapFunc, data['__task__'])(MapFunc.load_image(data))
-    
+
     def __len__(self):
         return len(self.ds)
 
@@ -102,7 +102,11 @@ class OFADataset(FairseqDataset):  # ~OFADataset
             self.ds.shuffle(epoch)
 
     def collater(self, samples, pad_to_length=None):
-        collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
+        collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer,
+                                        image_processor=self.image_processor,
+                                        max_src_length=300,
+                                        max_tgt_length=200,
+                                        padding="longest")  # or max_length
         return collate_fn(samples)
 
 
@@ -121,10 +125,10 @@ class IterDatasetWrap(torch.utils.data.Dataset):
             self.it = iter(self.ids)
             data = next(self.it)
         return getattr(MapFunc, self.task)(MapFunc.load_image(data))
-    
+
     def set_epoch(self, epoch):
         self.ids.set_epoch(epoch)
-    
+
     def __len__(self):
         return self.n_samples
 
@@ -151,7 +155,7 @@ class InvigTask(OFATask):
             logger.info(f"loading {name}-{_split} from {i['path']}")
             ds = datasets.load_from_disk(i['path'])[_split]
             for task, prob in zip(i['tasks'], i['probs']):
-                ds_task = ds.add_column("__task__", [task]*len(ds))\
+                ds_task = ds.add_column("__task__", [task] * len(ds))\
                             .filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
                 datasets_collection += [(name, task, ds_task, prob)]
 
