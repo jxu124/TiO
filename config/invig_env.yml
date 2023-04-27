@@ -62,7 +62,7 @@ train:  # 目标1M
     path: "/mnt/bn/hri-lq/datasets/hf-cache/llava_detail_23k"
     tasks: ["llava_detail_23k"]
     probs: [0.7]
-  - name: "openaimges"  # 29k
+  - name: "openimages"  # 29k
     path: "/mnt/bn/hri-lq/datasets/hf-cache/openimages_v1.2"
     tasks: ['openimages_detection']
     probs: [0.5]
