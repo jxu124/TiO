@@ -15,7 +15,7 @@ import torchvision.transforms as T
 # OFA
 try:
     from transformers import OFATokenizer
-except:
+except ImportError:
     from .ofa.tokenization_ofa import OFATokenizer
 
 
@@ -41,7 +41,7 @@ def get_image_processor(resolution=512, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5
     return image_processor
 
 
-def get_processor(pretrain_path="/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/hf/ofa-large", 
+def get_processor(pretrain_path="/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/hf/ofa-large",
                   resolution=512, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
     tokenizer = OFATokenizer.from_pretrained(pretrain_path, local_files_only=True, truncation_side="right")
     image_processor = get_image_processor(resolution, mean, std)
@@ -58,8 +58,8 @@ def sbbox_to_bbox_legacy(sbbox, w=None, h=None, num_bins=1000, strict=False):
             warnings.warn(f"Cannot parse bbox from \"{sbbox}\" .")
         bbox = np.asarray([0, 0, 999, 999])
     else:
-        bbox = np.asarray([int(res.group(1))/num_bins, int(res.group(2))/num_bins, int(res.group(3))/num_bins, int(res.group(4))/num_bins])
-    if w is not None and h is not None: 
+        bbox = np.asarray([int(res.group(1)), int(res.group(2)), int(res.group(3)), int(res.group(4))]) / num_bins
+    if w is not None and h is not None:
         bbox = bbox * np.array([w, h, w, h])
     return bbox
 
@@ -67,15 +67,15 @@ def sbbox_to_bbox_legacy(sbbox, w=None, h=None, num_bins=1000, strict=False):
 def sbbox_to_bbox(sbbox, w=None, h=None, num_bins=1000, strict=False):
     patten = re.compile(r"<bin_(\d+)> <bin_(\d+)> <bin_(\d+)> <bin_(\d+)>")
     ret = [re.match(patten, item) for item in sbbox.split("region: ")]
-    ret = [[i.group(1), i.group(2), i.group(3), i.group(4)] for i in ret if i != None]
+    ret = [[i.group(1), i.group(2), i.group(3), i.group(4)] for i in ret if i is not None]
     bbox = np.array(ret, dtype=int) / num_bins
     if not strict and bbox.size == 0:
         bbox = np.array([[0, 0, 1, 1]])
     bbox = np.clip(bbox, 1e-3, 1 - 1e-3)
-    if w is not None and h is not None: 
+    if w is not None and h is not None:
         bbox = bbox * np.array([w, h, w, h])
-    return bbox
-    
+    return bbox.reshape(-1, 4)
+
 
 def bbox_to_sbbox(bbox, w=None, h=None, num_bins=1000):
     """ This function converts a dense bounding box (bbox) to a string bounding box (sbbox). """
@@ -123,13 +123,13 @@ class OFAModelWarper(torch.nn.Module):
         self.gens = self.load_from_pretrain(ckpt_path, ofa_path)
         _, self.model, _, task = self.gens
         self.tokenizer, self.image_processor = task.processor
-        
+
     def forward(self, **batch):
         from transformers.modeling_outputs import Seq2SeqLMOutput
         net_output = self.model(**batch['net_input'])
         lprobs = self.model.get_normalized_probs(net_output, log_probs=True)
         target = self.model.get_targets(batch, net_output)
-        loss = torch.nn.functional.cross_entropy(lprobs.view(-1, 59457), target.view(-1), 
+        loss = torch.nn.functional.cross_entropy(lprobs.view(-1, 59457), target.view(-1),
                                                  ignore_index=self.tokenizer.pad_token_id, reduction='mean', label_smoothing=0.1)
         return Seq2SeqLMOutput(loss=loss, logits=lprobs)
 
@@ -137,7 +137,7 @@ class OFAModelWarper(torch.nn.Module):
     def load_from_pretrain(ckpt_path, ofa_path):
         try:
             from utils import checkpoint_utils
-        except:
+        except ImportError:
             raise ImportError("Cannot import 'utils', please set OFA path to sys.path.")
         logger.info("开始载入model参数...")
         model_overrides = {"bpe_dir": f"{ofa_path}/utils/BPE"}
@@ -151,7 +151,7 @@ class OFAModelWarper(torch.nn.Module):
         generator = task.build_generator(models, cfg.generation)
         logger.info("完成！")
         return generator, model, cfg, task
-    
+
     def generate_origin(self, sample, dtype=torch.float16, device='cuda'):
         from torch.cuda.amp import autocast
         # tokenizer image_processor
@@ -174,5 +174,3 @@ class OFAModelWarper(torch.nn.Module):
         patch_masks = torch.tensor([True] * len(src_tokens))
         sample = {"net_input": {"src_tokens": src_tokens, 'src_lengths': src_lengths, 'patch_images': patch_images, 'patch_masks': patch_masks}}
         return self.generate_origin(sample, dtype=torch.float16, device='cuda')
-
-    

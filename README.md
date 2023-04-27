@@ -13,6 +13,14 @@ python3 src/bench_oracle_guesswhat.py -c "/mnt/bn/ckpt-lq/vldd/invig_large_groun
 python3 src/bench_grounding_guesswhat.py -c "/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_4_21000.pt"
 
 ### 指令
+迭代2
+```
+
+
+```
+
+
+迭代1
 ```
 #instruction: human: 
 #context:
@@ -20,4 +28,17 @@ python3 src/bench_grounding_guesswhat.py -c "/mnt/bn/ckpt-lq/vldd/invig_large_gr
 
 其中：AI以agent自称，人类为huamn
 ```
+
+数据集features:
+global_image_id - string
+bbox - list
+image_path - string
+captions - list
+caption - string
+dialog - list
+dialog_cn - list
+
+id - string
+category - string
+raw_* - string
 
