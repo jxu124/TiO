@@ -7,6 +7,7 @@ from functools import wraps
 from collections import Counter
 from dataclasses import dataclass
 from typing import Optional, Any, Union, List
+import argparse
 import logging
 import warnings
 import math
@@ -18,6 +19,8 @@ import yaml
 
 # 3rd part
 from PIL import Image, ImageFile
+from datasets import load_from_disk, Features, Value
+from datasets.distributed import split_dataset_by_node
 import transformers
 import datasets
 import numpy as np
@@ -28,8 +31,10 @@ import base64
 from fairseq.data import FairseqDataset
 
 # invig module
-from .common import bbox_to_sbbox, world_info_from_env
+from .common import bbox_to_sbbox, world_info_from_env, get_processor
 
+
+logger = logging.getLogger(__name__)
 
 """
 使用方法：(例子是用三个数据集构建了三个任务数据集然后合并为一个总的数据集)
@@ -39,6 +44,7 @@ class MapFunc():
     cfg: dict = {}
     path_images: dict = {}
     test_images: set = set()
+    get_processor: Any = None
 
     @staticmethod
     def load_config(path_yaml):
@@ -47,6 +53,7 @@ class MapFunc():
         with open(MapFunc.cfg['env']['path_exclude_images'], "r") as f:
             MapFunc.test_images = set(json.load(f))
         MapFunc.path_images = MapFunc.cfg['env']['path_images']
+        MapFunc.processor = get_processor(pretrain_path=MapFunc.cfg['env']['path_tokenizer'], resolution=512)
 
     @staticmethod
     def filter_exclude_test_images(global_image_id):
@@ -107,7 +114,9 @@ class MapFunc():
         if min_turn is None:
             turn = max_turn
         else:
-            assert min_turn <= max_turn, f"【对话轮数错误】min_turn: {min_turn}, max_turn: {max_turn}"
+            # assert min_turn <= max_turn, f"【对话轮数错误】min_turn: {min_turn}, max_turn: {max_turn}"
+            if min_turn > max_turn:
+                warnings.warn(f"【对话轮数错误】min_turn: {min_turn}, max_turn: {max_turn}")
             turn = random.randint(min(min_turn, max_turn), max_turn)
         if human_first:
             # turn in [2, 4, 6, 8, ...] # turn * 2 + 2
@@ -225,7 +234,7 @@ class MapFunc():
         # 处理文本
         dialog = features['dialog']
         dialog = [j for i in dialog for j in i][1:]
-        if "?" not in dialog[-2] and len(dialog) > 2:  # 消除ok, i see.
+        if "?" not in dialog[-2] and len(dialog) > 3:  # 消除ok, i see.
             dialog = dialog[:-2]
         dialogs = [["ask a question to guess what i want.", *dialog],
                    ["can you specify which region the context describes?", *dialog]]
@@ -249,16 +258,13 @@ class MapFunc():
         # 处理文本
         dialog = features['dialog']
         dialog = [j for i in dialog for j in i][1:]
-        if "?" not in dialog[-2] and len(dialog) > 2:  # 消除ok, i see.
+        if "?" not in dialog[-2] and len(dialog) > 3:  # 消除ok, i see.
             dialog = dialog[:-2]
         dialogs = [["answer the question based on the region.", *dialog],
-                   ["what is in the region?", dialog[0]]]
+                   ["state your query about the region.", dialog[0]]]
         text_candidate = [MapFunc.make_text_pair(dialogs[0], 1, src_sbbox=sbbox), MapFunc.make_text_pair(dialogs[1], 0, src_sbbox=sbbox)]
 
-        if len(dialog) >= 3:  # (query), a, q -> a
-            weights = [9, 1]
-        else:
-            weights = [0, 1]
+        weights = [9, 1]
         style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
@@ -573,46 +579,92 @@ class DataCollatorForOFA(transformers.DataCollatorForSeq2Seq):
         return features
 
 
-class OFADataset(FairseqDataset, torch.utils.data.Dataset):  # ~OFADataset
-    def __init__(self, dataset, tokenizer=None, image_processor=None, **args):
-        from datasets.distributed import split_dataset_by_node
-        # 分布式适配
-        _, rank, world_size = world_info_from_env()
-        self.dataset = split_dataset_by_node(dataset, rank=rank, world_size=world_size)
-        self.tokenizer, self.image_processor = tokenizer, image_processor
-        self.args = args
+# class OFADataset(FairseqDataset, torch.utils.data.Dataset):  # ~OFADataset
+#     def __init__(self, dataset, tokenizer=None, image_processor=None, **args):
+#         from datasets.distributed import split_dataset_by_node
+#         # 分布式适配
+#         _, rank, world_size = world_info_from_env()
+#         self.dataset = split_dataset_by_node(dataset, rank=rank, world_size=world_size)
+#         self.tokenizer, self.image_processor = tokenizer, image_processor
+#         self.args = args
 
-    def __getitem__(self, index):
-        return self.dataset.__getitem__(index)
+#     def __getitem__(self, index):
+#         return self.dataset.__getitem__(index)
+
+#     def __len__(self):
+#         return len(self.dataset)
+
+#     def set_epoch(self, epoch):
+#         super().set_epoch(epoch)
+#         self.dataset.shuffle(seed=42 + epoch)
+
+#     def collater(self, samples, pad_to_length=None):
+#         collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
+#         return collate_fn(samples)
+
+
+class OFADataset(FairseqDataset):  # ~OFADataset
+    def __init__(self, ds, tokenizer=None, image_processor=None, **args):
+        _, rank, world_size = world_info_from_env()
+        total_count = len(ds)
+        self.ds = split_dataset_by_node(ds, rank, world_size)
+        self.dataset = argparse.Namespace(**{'get_total_row_count': lambda: total_count, "_seek": lambda offset=0: None})
+        self.tokenizer, self.image_processor = tokenizer, image_processor
+        self.collater_args = args
+
+    def __getitem__(self, idx):
+        data = self.ds[idx]
+        return getattr(MapFunc, data['__task__'])(MapFunc.load_image(data))
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.ds)
 
     def set_epoch(self, epoch):
         super().set_epoch(epoch)
-        self.dataset.shuffle(seed=42 + epoch)
+        if hasattr(self.ds, "set_epoch"):
+            self.ds.set_epoch(epoch)
+        elif hasattr(self.ds, "shuffle"):
+            self.ds.shuffle(epoch)
 
     def collater(self, samples, pad_to_length=None):
-        collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer, image_processor=self.image_processor)
+        collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer,
+                                        image_processor=self.image_processor,
+                                        **self.collater_args)  # or max_length
         return collate_fn(samples)
 
 
-@dataclass
-class GenSampler():
-    generators: list
-    weights: list
+def get_dataset(split):
+    # 1 按照node切分数据集
+    datasets_collection = []
+    for i in MapFunc.cfg[split]:
+        if i.get('streaming'):
+            continue
+        name = i['name']
+        logger.info(f"loading {name}-{split} from {i['path']}")
+        ds = datasets.load_from_disk(i['path'])[split]
+        for task, prob in zip(i['tasks'], i['probs']):
+            ds_task = ds.add_column("__task__", [task] * len(ds))\
+                        .filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
+            datasets_collection += [(name, task, ds_task, prob)]
 
-    def __call__(self):
-        while True:
-            try:
-                yield next(random.choices(self.iters, weights=self.weights)[0])
-            except AttributeError:
-                self.init_iter()
-                yield next(random.choices(self.iters, weights=self.weights)[0])
-            except StopIteration:
-                self.init_iter()
-                yield next(random.choices(self.iters, weights=self.weights)[0])
-                # raise StopIteration
+    # 2 按照比例组合数据
+    tasks = [i[1] for i in datasets_collection]
+    use_datasets = [i[2] for i in datasets_collection]
+    probs = np.asarray([i[3] for i in datasets_collection])
+    counts = np.asarray([len(ds) for ds in use_datasets])
+    n_samples = (probs * counts).astype(int)
+    total_count = sum(n_samples) // 2048 * 2048 if split == 'train' else 2048
+    n_samples[-1] = total_count - sum(n_samples[:-1])
+    # DEBUG: n_samples = [256] * len(n_samples)
+    use_datasets = [ds.shuffle().select(range(n)) for ds, n in zip(use_datasets, n_samples)]
 
-    def init_iter(self):
-        self.iters = [iter(g) for g in self.generators]
+    # 3 构造fairseq_dataset，送进去预处理函数
+    max_src_length, max_tgt_length = MapFunc.cfg['hparam']['max_src_length'], MapFunc.cfg['hparam']['max_tgt_length']
+    dataset = datasets.concatenate_datasets(use_datasets)
+    dataset = OFADataset(dataset, *MapFunc.processor, max_src_length=max_src_length, max_tgt_length=max_tgt_length)
+
+    # 4 打印logs
+    logger.info(f"load {split} data: {len(use_datasets)} ({len(dataset)}/{total_count} samples) dataset(s)")
+    logger.info("Tasks: " + ", ".join([f'{t}({n})' for t, n in zip(tasks, n_samples)]))
+
+    return dataset

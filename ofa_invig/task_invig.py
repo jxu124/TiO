@@ -22,12 +22,10 @@ from fairseq.tasks import register_task
 from tasks.ofa_task import OFATask, OFAConfig
 
 # invig的模块
-from .dialog_dataset import MapFunc, DataCollatorForOFA, GenSampler
+from .dialog_dataset import MapFunc, DataCollatorForOFA, get_dataset
 from .common import get_processor, world_info_from_env
 
 # huggingface 的模块
-from datasets.distributed import split_dataset_by_node
-from datasets import load_dataset, load_from_disk
 import datasets
 
 
@@ -71,45 +69,6 @@ class InvigConfig(OFAConfig):
     )
 
 
-# hack fairseq
-from datasets import load_from_disk, Features, Value
-from fairseq.data import FairseqDataset
-
-
-# iterable 数据集：包装为普通数据集
-
-import argparse
-class OFADataset(FairseqDataset):  # ~OFADataset
-    def __init__(self, ds, tokenizer=None, image_processor=None):
-        _, rank, world_size = world_info_from_env()
-        total_count = len(ds)
-        self.ds = split_dataset_by_node(ds, rank, world_size)
-        self.dataset = argparse.Namespace(**{'get_total_row_count': lambda: total_count, "_seek": lambda offset=0: None})
-        self.tokenizer, self.image_processor = tokenizer, image_processor
-
-    def __getitem__(self, idx):
-        data = self.ds[idx]
-        return getattr(MapFunc, data['__task__'])(MapFunc.load_image(data))
-
-    def __len__(self):
-        return len(self.ds)
-
-    def set_epoch(self, epoch):
-        super().set_epoch(epoch)
-        if hasattr(self.ds, "set_epoch"):
-            self.ds.set_epoch(epoch)
-        elif hasattr(self.ds, "shuffle"):
-            self.ds.shuffle(epoch)
-
-    def collater(self, samples, pad_to_length=None):
-        collate_fn = DataCollatorForOFA(tokenizer=self.tokenizer,
-                                        image_processor=self.image_processor,
-                                        max_src_length=300,
-                                        max_tgt_length=200,
-                                        padding="longest")  # or max_length
-        return collate_fn(samples)
-
-
 class IterDatasetWrap(torch.utils.data.Dataset):
     def __init__(self, cfg, split="train"):
         self.ids = datasets.load_dataset(cfg['path'], streaming=True)[split]
@@ -145,39 +104,7 @@ class InvigTask(OFATask):
         # paths = self.cfg.data.split(',')
         # assert len(paths) > 0
         _split = "validation" if split == "valid" else split
-
-        # 1 按照node切分数据集
-        datasets_collection = []
-        for i in MapFunc.cfg[_split]:
-            if i.get('streaming'):
-                continue
-            name = i['name']
-            logger.info(f"loading {name}-{_split} from {i['path']}")
-            ds = datasets.load_from_disk(i['path'])[_split]
-            for task, prob in zip(i['tasks'], i['probs']):
-                ds_task = ds.add_column("__task__", [task] * len(ds))\
-                            .filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
-                datasets_collection += [(name, task, ds_task, prob)]
-
-        # 2 按照比例组合数据
-        tasks = [i[1] for i in datasets_collection]
-        use_datasets = [i[2] for i in datasets_collection]
-        probs = np.asarray([i[3] for i in datasets_collection])
-        counts = np.asarray([len(ds) for ds in use_datasets])
-        n_samples = (probs * counts).astype(int)
-        total_count = sum(n_samples) // 2048 * 2048 if split == 'train' else 2048
-        n_samples[-1] = total_count - sum(n_samples[:-1])
-        # DEBUG: n_samples = [256] * len(n_samples)
-        use_datasets = [ds.shuffle().select(range(n)) for ds, n in zip(use_datasets, n_samples)]
-
-        # 3 构造fairseq_dataset，送进去预处理函数
-        dataset = datasets.concatenate_datasets(use_datasets)
-        dataset = OFADataset(dataset, *self.processor)
-        self.datasets[split] = dataset
-
-        # 4 打印logs
-        logger.info(f"load {split} data: {len(use_datasets)} ({len(dataset)}/{total_count} samples) dataset(s)")
-        logger.info("Tasks: " + ", ".join([f'{t}({n})' for t, n in zip(tasks, n_samples)]))
+        self.datasets[split] = get_dataset(_split)
 
     def build_model(self, cfg):
         model = super().build_model(cfg)
