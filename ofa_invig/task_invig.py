@@ -97,6 +97,7 @@ class InvigTask(OFATask):
     def __init__(self, cfg: InvigConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
         MapFunc.load_config(self.cfg.config_yaml)
+        logger.info(f"load config_yaml: {self.cfg.config_yaml}")
         self.processor = get_processor(pretrain_path=MapFunc.cfg['env']['path_tokenizer'], resolution=512)
         datasets.disable_progress_bar()
 

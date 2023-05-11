@@ -11,8 +11,40 @@
 
 python3 src/bench_oracle_guesswhat.py -c "/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_4_21000.pt"
 python3 src/bench_grounding_guesswhat.py -c "/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_4_21000.pt"
+/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_1e-5_512_20230504-0049/checkpoint_3_3000.pt
+/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_1e-5_512_20230504-0049/checkpoint_9_10400.pt
+
+
+python3 ofa_invig/bench_grounding.py \
+    --ckpt "/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_1e-5_512_20230504-0049/checkpoint_9_10400.pt"\
+    --batch_size 16\
+    --task guesswhat_grounding
+
 
 ### 指令
+评测：
+```
+python3 ofa_invig/bench_grounding.py \
+    --ckpt "/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230428-1407/checkpoint_best.pt"\
+    --batch_size 16\
+    --task invig_grounding
+
+python3 ofa_invig/bench_grounding.py \
+    --ckpt "/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_1e-5_512_20230504-0049/checkpoint_3_3000.pt"\
+    --batch_size 32\
+    --task guesswhat_grounding
+
+python3 ofa_invig/bench_oracle_guesswhat.py \
+    --ckpt "/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230428-1407/checkpoint_best.pt"\
+    --batch_size 16
+```
+
+性能：
+| model | guesswhat_grounding | invig_grounding | guesswhat_oracle |
+| - | - | - | - |
+| /mnt/bn/hri-lq/projects/VLDD/OFA-Invig/results-debug/checkpoint-60500/pytorch_model.bin | 0.721 | 0.758 | - |
+| /mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230428-1407/checkpoint_best.pt | 0.0 | 0.767 | - |
+
 迭代2
 ```
 

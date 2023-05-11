@@ -7,5 +7,5 @@
 *.log
 *.out
 **/runs**
-**/results/**
+**/results**
 *.vscode

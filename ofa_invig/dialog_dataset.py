@@ -555,9 +555,11 @@ class DataCollatorForOFA(transformers.DataCollatorForSeq2Seq):
         # max_length longest
         inputs = self.tokenizer(text=src_texts, return_length=True, max_length=self.max_src_length,
                                 padding=self.padding, truncation=True, return_tensors=self.return_tensors)
-        with self.tokenizer.as_target_tokenizer():
-            labels = self.tokenizer(text=tgt_texts, max_length=self.max_tgt_length,
-                                    padding=self.padding, truncation=True, return_tensors=self.return_tensors)
+        labels = self.tokenizer(text=tgt_texts, max_length=self.max_tgt_length,
+                                padding=self.padding, truncation=True, return_tensors=self.return_tensors)
+        # with self.tokenizer.as_target_tokenizer():
+        #     labels = self.tokenizer(text=tgt_texts, max_length=self.max_tgt_length,
+        #                             padding=self.padding, truncation=True, return_tensors=self.return_tensors)
         # labels = self.tokenizer(text_target=tgt_texts, max_length=self.max_tgt_length,
         #                         padding=self.padding, truncation=True, return_tensors=self.return_tensors)
         patch_masks = torch.tensor([True] * len(patch_images))
@@ -604,17 +606,19 @@ class DataCollatorForOFA(transformers.DataCollatorForSeq2Seq):
 
 
 class OFADataset(FairseqDataset):  # ~OFADataset
-    def __init__(self, ds, tokenizer=None, image_processor=None, **args):
+    style = None
+
+    def __init__(self, ds, tokenizer=None, image_processor=None, distributed_split=True, **args):
         _, rank, world_size = world_info_from_env()
         total_count = len(ds)
-        self.ds = split_dataset_by_node(ds, rank, world_size)
+        self.ds = split_dataset_by_node(ds, rank, world_size) if distributed_split else ds
         self.dataset = argparse.Namespace(**{'get_total_row_count': lambda: total_count, "_seek": lambda offset=0: None})
         self.tokenizer, self.image_processor = tokenizer, image_processor
         self.collater_args = args
 
     def __getitem__(self, idx):
         data = self.ds[idx]
-        return getattr(MapFunc, data['__task__'])(MapFunc.load_image(data))
+        return getattr(MapFunc, data['__task__'])(MapFunc.load_image(data), self.style)
 
     def __len__(self):
         return len(self.ds)
@@ -633,7 +637,7 @@ class OFADataset(FairseqDataset):  # ~OFADataset
         return collate_fn(samples)
 
 
-def get_dataset(split):
+def get_dataset(split, distributed_split=True):
     # 1 按照node切分数据集
     datasets_collection = []
     for i in MapFunc.cfg[split]:
@@ -653,7 +657,9 @@ def get_dataset(split):
     probs = np.asarray([i[3] for i in datasets_collection])
     counts = np.asarray([len(ds) for ds in use_datasets])
     n_samples = (probs * counts).astype(int)
+    print(f"sum(n_samples)={sum(n_samples)}")
     total_count = sum(n_samples) // 2048 * 2048 if split == 'train' else 2048
+    total_count = sum(n_samples) // 512 * 512
     n_samples[-1] = total_count - sum(n_samples[:-1])
     # DEBUG: n_samples = [256] * len(n_samples)
     use_datasets = [ds.shuffle().select(range(n)) for ds, n in zip(use_datasets, n_samples)]
@@ -661,7 +667,7 @@ def get_dataset(split):
     # 3 构造fairseq_dataset，送进去预处理函数
     max_src_length, max_tgt_length = MapFunc.cfg['hparam']['max_src_length'], MapFunc.cfg['hparam']['max_tgt_length']
     dataset = datasets.concatenate_datasets(use_datasets)
-    dataset = OFADataset(dataset, *MapFunc.processor, max_src_length=max_src_length, max_tgt_length=max_tgt_length)
+    dataset = OFADataset(dataset, *MapFunc.processor, distributed_split=distributed_split, max_src_length=max_src_length, max_tgt_length=max_tgt_length)
 
     # 4 打印logs
     logger.info(f"load {split} data: {len(use_datasets)} ({len(dataset)}/{total_count} samples) dataset(s)")

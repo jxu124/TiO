@@ -5,6 +5,7 @@ import re
 import os
 import random
 import logging
+import argparse
 
 # 3rd-part
 from PIL import Image, ImageFile
@@ -123,6 +124,13 @@ class OFAModelWarper(torch.nn.Module):
         self.gens = self.load_from_pretrain(ckpt_path, ofa_path)
         _, self.model, _, task = self.gens
         self.tokenizer, self.image_processor = task.processor
+        self.pad_token_id = self.tokenizer.pad_token_id
+        from transformers import PretrainedConfig
+        self.config = PretrainedConfig(hidden_size=self.model.decoder.embed_tokens.weight.shape[1])
+
+    @property
+    def dtype(self):
+        return self.model.decoder.embed_tokens.weight.dtype
 
     def forward(self, **batch):
         from transformers.modeling_outputs import Seq2SeqLMOutput
@@ -130,7 +138,7 @@ class OFAModelWarper(torch.nn.Module):
         lprobs = self.model.get_normalized_probs(net_output, log_probs=True)
         target = self.model.get_targets(batch, net_output)
         loss = torch.nn.functional.cross_entropy(lprobs.view(-1, 59457), target.view(-1),
-                                                 ignore_index=self.tokenizer.pad_token_id, reduction='mean', label_smoothing=0.1)
+                                                 ignore_index=self.pad_token_id, label_smoothing=0.1)
         return Seq2SeqLMOutput(loss=loss, logits=lprobs)
 
     @staticmethod
@@ -143,9 +151,9 @@ class OFAModelWarper(torch.nn.Module):
         model_overrides = {"bpe_dir": f"{ofa_path}/utils/BPE"}
         models, cfg, task = checkpoint_utils.load_model_ensemble_and_task([ckpt_path], model_overrides)
         model = models[0]
-        logger.info("开始载入ema参数...")
+        logger.info("载入ema参数...")
         # model.load_state_dict(checkpoint_utils.load_ema_from_checkpoint(ckpt_path)['model'])
-        logger.info("模型设置中...")
+        logger.info("设置模型...")
         model.eval()
         # model.prepare_for_inference_(cfg)
         generator = task.build_generator(models, cfg.generation)
