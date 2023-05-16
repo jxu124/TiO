@@ -11,6 +11,10 @@ env:
         cc_sbu_align: "/mnt/bn/hri-lq/datasets/images/cc_sbu_align"
         cc3m_llava: "/mnt/bn/hri-lq/datasets/images/cc3m_llava"
 
+hparam:
+    max_src_length: 240
+    max_tgt_length: 320
+
 train:  # 目标1M
   - name: "invig"  # 17k
     path: /mnt/bn/hri-lq/datasets/hf-cache/invig
@@ -71,8 +75,34 @@ validation:
   - name: "invig"  # 17652
     path: /mnt/bn/hri-lq/datasets/hf-cache/invig
     tasks: ["invig_grounding"]
-    probs: [0.5]
+    probs: [0.1]
   - name: guesswhat  # 71165
     path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
     tasks: ["guesswhat_grounding"]
-    probs: [0.5]
+    probs: [1]
+
+test:
+  guesswhat_grounding_end2end: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
+    task: "guesswhat_grounding"
+    style: 0
+  guesswhat_grounding: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
+    task: "guesswhat_grounding"
+    style: 0
+  guesswhat_oracle: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
+    task: "guesswhat_answer"
+    style: 0
+  invig_grounding_end2end: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/invig
+    task: "invig_grounding"
+    style: 0
+  invig_grounding: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/invig
+    task: "invig_grounding"
+    style: 0
+  invig_oracle: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/invig
+    task: "invig_answer"
+    style: 0
