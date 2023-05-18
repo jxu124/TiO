@@ -9,6 +9,10 @@ PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 # ==== 预训练模型 ====
 config_yaml=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/ablation/invig-large.yml
 restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_large.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_ablation_checkpoints/10_3e-5_512_20230512-1515/checkpoint_best.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_ablation_checkpoints/10_3e-5_512_20230516-0248/checkpoint_3_4500.pt
+# 下面是最强模型from grounding
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_ablation_checkpoints/10_3e-5_512_20230512-1304/checkpoint_best.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
@@ -37,7 +41,7 @@ arch=ofa_large
 criterion=adjust_label_smoothed_cross_entropy
 label_smoothing=0.1
 warmup_ratio=0.06
-batch_size=14
+batch_size=12
 update_freq=1
 resnet_drop_path_rate=0.0
 encoder_drop_path_rate=0.2
@@ -55,7 +59,7 @@ subfix=`date "+%Y%m%d-%H%M"`
 
 for max_epoch in 10; do
   echo "max_epoch "${max_epoch}
-  for lr in 3e-5; do
+  for lr in 1e-5; do
     echo "lr "${lr}
     for patch_image_size in 512; do
       echo "patch_image_size "${patch_image_size}
@@ -102,7 +106,7 @@ for max_epoch in 10; do
           --fixed-validation-seed=7 \
           --no-epoch-checkpoints --keep-best-checkpoints=2 \
           --save-interval=1 --validate-interval=1 \
-          --save-interval-updates=2000 --validate-interval-updates=2000 \
+          --save-interval-updates=500 --validate-interval-updates=500 \
           --eval-acc \
           --eval-args='{"beam":5,"min_len":1,"max_len_a":0,"max_len_b":100}' \
           --best-checkpoint-metric=score --maximize-best-checkpoint-metric \

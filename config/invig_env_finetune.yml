@@ -51,29 +51,29 @@ train:  # 目标1M
   - name: "llava_conversation_58k"  # 58k (46k)
     path: "/mnt/bn/hri-lq/datasets/hf-cache/llava_conversation_58k"
     tasks: ["llava_conversation_58k"]
-    probs: [0.02]
+    probs: [0.05]
   - name: "llava_complex_reasoning_77k"  # 77k (63k)
     path: "/mnt/bn/hri-lq/datasets/hf-cache/llava_complex_reasoning_77k"
     tasks: ["llava_complex_reasoning_77k"]
-    probs: [0.02]
+    probs: [0.05]
   - name: "llava_detail_23k"  # 23k (17k)
     path: "/mnt/bn/hri-lq/datasets/hf-cache/llava_detail_23k"
     tasks: ["llava_detail_23k"]
-    probs: [0.02]
+    probs: [0.05]
   - name: "openimages"  # 29k
     path: "/mnt/bn/hri-lq/datasets/hf-cache/openimages_v1.2"
     tasks: ['openimages_detection']
     probs: [0.5]
 
 validation: 
-  - name: "invig"  # ~2k
+  - name: "invig"  # 17652
     path: /mnt/bn/hri-lq/datasets/hf-cache/invig
     tasks: ["invig_grounding"]
     probs: [1]
-  # - name: guesswhat  # ~20k
+  # - name: guesswhat  # 71165
   #   path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
   #   tasks: ["guesswhat_grounding"]
-  #   probs: [1]
+  #   probs: [0.5]
 
 test:
   guesswhat_grounding: 

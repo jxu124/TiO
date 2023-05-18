@@ -32,33 +32,6 @@ def iou(box_a, box_b):
     return inter / union
 
 
-def _calculate_ap_score(hyps, refs, thresh=0.5):
-    interacts = torch.cat(
-        [torch.where(hyps[:, :2] < refs[:, :2], refs[:, :2], hyps[:, :2]),
-         torch.where(hyps[:, 2:] < refs[:, 2:], hyps[:, 2:], refs[:, 2:])],
-        dim=1
-    )
-    area_predictions = (hyps[:, 2] - hyps[:, 0]) * (hyps[:, 3] - hyps[:, 1])
-    area_targets = (refs[:, 2] - refs[:, 0]) * (refs[:, 3] - refs[:, 1])
-    interacts_w = interacts[:, 2] - interacts[:, 0]
-    interacts_h = interacts[:, 3] - interacts[:, 1]
-    area_interacts = interacts_w * interacts_h
-    ious = area_interacts / (area_predictions + area_targets - area_interacts + 1e-6)
-    return ((ious >= thresh) & (interacts_w > 0) & (interacts_h > 0)).float()
-
-
-def eval_grounding_acc_v2(grounding_res, grounding_ann):
-    """
-    grounding_res: (N, 4)
-    grounding_ann: (N, 4)
-    """
-    ap_scores = {}
-    for t in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]:
-        ap_score = _calculate_ap_score(torch.tensor(grounding_res), torch.tensor(grounding_ann), t)
-        ap_scores[f"grounding_acc_iou_{t}"] = ap_score.sum().item() / len(ap_score)
-    return ap_scores
-
-
 # pred_ref_bboxes, ref_bboxes
 # pred_grounding_logits, (ref_bboxes, bboxes)
 def eval_grounding_acc(
@@ -117,6 +90,33 @@ def eval_grounding_acc(
         ))
 
     return results
+
+
+def _calculate_ap_score(hyps, refs, thresh=0.5):
+    interacts = torch.cat(
+        [torch.where(hyps[:, :2] < refs[:, :2], refs[:, :2], hyps[:, :2]),
+         torch.where(hyps[:, 2:] < refs[:, 2:], hyps[:, 2:], refs[:, 2:])],
+        dim=1
+    )
+    area_predictions = (hyps[:, 2] - hyps[:, 0]) * (hyps[:, 3] - hyps[:, 1])
+    area_targets = (refs[:, 2] - refs[:, 0]) * (refs[:, 3] - refs[:, 1])
+    interacts_w = interacts[:, 2] - interacts[:, 0]
+    interacts_h = interacts[:, 3] - interacts[:, 1]
+    area_interacts = interacts_w * interacts_h
+    ious = area_interacts / (area_predictions + area_targets - area_interacts + 1e-6)
+    return ((ious >= thresh) & (interacts_w > 0) & (interacts_h > 0)).float()
+
+
+def eval_grounding_acc_v2(grounding_res, grounding_ann):
+    """
+    grounding_res: (N, 4)
+    grounding_ann: (N, 4)
+    """
+    ap_scores = {}
+    for t in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]:
+        ap_score = _calculate_ap_score(torch.tensor(grounding_res), torch.tensor(grounding_ann), t)
+        ap_scores[f"grounding_acc_iou_{t}"] = ap_score.sum().item() / len(ap_score)
+    return ap_scores
 
 
 def eval_qgen_word_acc(

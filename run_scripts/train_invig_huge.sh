@@ -7,10 +7,15 @@ PATH_D_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
 PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 
 # ==== 预训练模型 ====
+config_yaml=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_env.yml
 restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_huge.pt
 restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_checkpoints/10_3e-5_512_20230424-2228/checkpoint_last.pt
 restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230425-0955/checkpoint_last.pt
 restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230425-1915/checkpoint_2_7000.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230426-0356/checkpoint_2_12000.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230427-1312/checkpoint_1_2000.pt
+restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230428-1407/checkpoint_9_52000.pt
+restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_huge.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
 # restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
@@ -46,8 +51,8 @@ encoder_drop_path_rate=0.2
 decoder_drop_path_rate=0.2
 dropout=0.1
 attention_dropout=0.0
-max_src_length=280
-max_tgt_length=80
+max_src_length=240
+max_tgt_length=280
 num_bins=1000
 # lr=3e-5
 # max_epoch=5
@@ -72,6 +77,7 @@ for max_epoch in 10; do
       ## add --use_env for pt200
       python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
           $data \
+          --config-yaml=${config_yaml} \
           --selected-cols=${selected_cols} \
           --bpe-dir=${bpe_dir} \
           --user-dir=${user_dir} \
@@ -103,7 +109,7 @@ for max_epoch in 10; do
           --fixed-validation-seed=7 \
           --no-epoch-checkpoints --keep-best-checkpoints=2 \
           --save-interval=1 --validate-interval=1 \
-          --save-interval-updates=1000 --validate-interval-updates=1000 \
+          --save-interval-updates=2000 --validate-interval-updates=1000 \
           --eval-acc \
           --eval-args='{"beam":5,"min_len":1,"max_len_a":0,"max_len_b":100}' \
           --best-checkpoint-metric=score --maximize-best-checkpoint-metric \

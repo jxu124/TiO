@@ -1,0 +1,50 @@
+
+env:
+    path_ofa: "/mnt/bn/hri-lq/projects/VLDD/OFA"
+    path_invig: "/mnt/bn/hri-lq/projects/VLDD/OFA-Invig"
+    path_tokenizer: "/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/hf/ofa-large"
+    path_exclude_images: "/mnt/bn/hri-lq/datasets/hf-cache/test_images.json"
+    path_images:
+        coco: "/mnt/bn/hri-lq/datasets/images/coco"
+        visdial: "/mnt/bn/hri-lq/datasets/images/visdial"
+        openimages_v1.2: "/mnt/bn/hri-lq/datasets/images/openimages_v1.2"
+        cc_sbu_align: "/mnt/bn/hri-lq/datasets/images/cc_sbu_align"
+        cc3m_llava: "/mnt/bn/hri-lq/datasets/images/cc3m_llava"
+
+hparam:
+    max_src_length: 240
+    max_tgt_length: 320
+
+train:  # 目标1M
+  - name: "invig"  # 17k
+    path: /mnt/bn/hri-lq/datasets/hf-cache/invig
+    tasks: ["invig_question", "invig_answer", "invig_grounding"]
+    probs: [0.1, 0.1, 1]
+  - name: guesswhat  # 92k （68k）
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
+    tasks: ["guesswhat_question", "guesswhat_answer", "guesswhat_grounding"]
+    probs: [0.1, 0.1, 1]
+
+validation: 
+  # - name: "invig"  # 17652
+  #   path: /mnt/bn/hri-lq/datasets/hf-cache/invig
+  #   tasks: ["invig_grounding"]
+  #   probs: [0.5]
+  - name: guesswhat  # 71165
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
+    tasks: ["guesswhat_grounding"]
+    probs: [0.5]
+
+test:
+  guesswhat_grounding: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
+    task: "guesswhat_grounding"
+    style: 0
+  invig_grounding: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/invig
+    task: "invig_grounding"
+    style: 0
+  guesswhat_oracle: 
+    path: /mnt/bn/hri-lq/datasets/hf-cache/guesswhat
+    task: "guesswhat_oracle"
+    style: 0

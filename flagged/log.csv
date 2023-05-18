@@ -1,0 +1,2 @@
+index,image,image_anns,chat,bbox_gt,input,flag,username,timestamp
+2,/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/flagged/image/tmp71mnx1gc.png,/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/flagged/image_anns/tmpjvb96lec.json,/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/flagged/chat/tmp38plfg59.json,"[0.2, 0.2, 0.8, 0.8]",#instruction: what does the image describe?,,,2023-05-11 21:41:38.840221

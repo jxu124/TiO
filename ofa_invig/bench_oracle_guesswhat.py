@@ -8,8 +8,10 @@ with open(path_yaml) as f:
 args = argparse.Namespace(**cfg['env'])
 
 # 路径设置
+import copy
 import os
 import sys
+import re
 import json
 sys.path.append(cfg['env']['path_ofa'])
 os.chdir(cfg['env']['path_invig'])
@@ -21,6 +23,8 @@ import logging
 import numpy as np
 import torch
 import random
+from PIL import Image
+# import mmcv
 
 # 载入fairseq
 from fairseq import utils
@@ -33,7 +37,6 @@ from datasets import load_from_disk
 import transformers
 import datasets
 
-        
 # 载入OFA的模块 自己invig的模块
 from utils import checkpoint_utils
 from ofa_invig.dialog_dataset import MapFunc, DataCollatorForOFA
@@ -59,34 +62,19 @@ def guesswhat_oracle(features, style=None):
     bbox = features['bbox']
     sbbox = bbox_to_sbbox(bbox, *image.size)
     # 处理文本
-    dialog = json.loads(features['dialog'])
-    for turn in range(1, len(dialog)+1):
-        context = ["query: guess what i want."]
-        for t in range(turn-1):
-            context += [f"question: {dialog[t][0]}"]  # question
-            context += [f"answer: {dialog[t][1]}"]  # answer
-        # context = ["agent: guess what i want."]
-        # for t in range(turn-1):
-        #     context += [f"human: {dialog[t][0]}"]  # question
-        #     context += [f"agent: {dialog[t][1]}"]  # answer
-        context = " ".join(context)
-        question = dialog[turn-1][0]
-        answer = dialog[turn-1][1]
-        based_on_the_region = "based on the region " if random.random() > 0.5 else ""
+    _dialog = features['dialog']
+    _dialog = [j for i in _dialog for j in i]
+    for m in range(1, len(_dialog) // 2):
+        dialog = _dialog[:m * 2]
 
-        src_candidate = [
-            f" \n#instruction: answer the question {based_on_the_region}with yes or no. {question}\n#region: {sbbox}\n#context: \"{context}\"",
-            f" \n#instruction: {question} yes or no?\n#region: {sbbox}\n#context: \"{context}\"",
-        ]
-        tgt_candidate = [
-            f" {answer}",
-            f" {answer}",
-        ]
-        weights = [7, 3]
-        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
-        src_text = src_candidate[style].lower()
-        tgt_text = tgt_candidate[style].lower()
-        assert image and question and answer
+        dialogs = [["answer the question based on the region with yes or no."] + dialog]
+        text_candidate = [MapFunc.make_text_pair(d, human_first=True, src_sbbox=sbbox) for d in dialogs]
+
+        weights = [1]
+        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        src_text = text_candidate[style][0].lower()
+        tgt_text = text_candidate[style][1].lower()
+        # tgt_text = "not yet. " + tgt_text if style == 1 else tgt_text
         yield {"src_text": src_text, "tgt_text": tgt_text, "image": image}
 
 
@@ -110,25 +98,29 @@ if __name__ == "__main__":
     # huge
     # A100-80g: batch_size=128
     # V100-32g: batch_size=16
-    # python3 ofa_invig/bench_oracle_guesswhat.py -c /mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230425-0955/checkpoint_1_6000.pt --batch_size 16
     parser = argparse.ArgumentParser()
+    parser.add_argument("--task", default="guesswhat_oracle", type=str)
     parser.add_argument("-c", "--ckpt", default="/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/ofa_large.pt", type=str)
-    parser.add_argument("--batch_size", default=48, type=int)
-    # main_args = parser.parse_args(["-c", "/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/ofa_large.pt"])
-    # main_args = parser.parse_args(["-c", "/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230425-0955/checkpoint_1_5000.pt"])
+    parser.add_argument("--batch_size", default=16, type=int)
+    main_args = parser.parse_args(["-c", "/mnt/bn/hri-lq/projects/VLDD/Link/ofa-pretrain/ofa_large.pt"])
     main_args = parser.parse_args()
 
     # 1 load model
+    task_name = main_args.task
+    assert task_name in ['guesswhat_oracle']
     path_ckpt = main_args.ckpt
     model = OFAModelWarper(path_ckpt, cfg['env']['path_ofa'], path_yaml)
-    logger.info(f"Test OracleGuesswhat on {path_ckpt}")
+    logger.info(f"Test {task_name} on {path_ckpt}")
 
     # 2 load dataset
-    ds = datasets.load_from_disk("/mnt/bn/hri-lq/datasets/hf-cache/guesswhat")['test']
-    ds = ds.add_column("__task__", ["guesswhat_oracle"]*len(ds))  # .filter(MapFunc.filter_exclude_test_images, input_columns=['global_image_id'])
+    from ofa_invig.dialog_dataset import OFADataset
+    test_config = MapFunc.cfg['test'][task_name]
+    task = test_config['task']
+    ds = datasets.load_from_disk(test_config['path'])['test']
+    ds = ds.add_column("__task__", [task] * len(ds)).shuffle(42)
     ids = OracleDataset(ds)
     collate_fn = DataCollatorForOFA(tokenizer=model.tokenizer, image_processor=model.image_processor)
-    loader = torch.utils.data.DataLoader(ids, batch_size=main_args.batch_size, num_workers=8, collate_fn=collate_fn)
+    loader = torch.utils.data.DataLoader(ids, batch_size=main_args.batch_size, num_workers=4, collate_fn=collate_fn)
 
     # 3 benchmark
     t = tqdm(loader)
@@ -150,6 +142,7 @@ if __name__ == "__main__":
     logger.info(f"OracleAcc: {acc:.3f}")
 
     # 4 save results
-    with open("./eval_bench_oracle_guesswhat.log", 'w') as f:
-        json.dump({"acc": acc, "texts_gt": texts_gt, "texts_gen": texts_gen, "history": history}, f)
-    logger.info(f"Saved results to ./eval_oracle.log")
+    fn = f'./eval_{task_name}_{os.path.basename(path_ckpt)}.log'
+    with open(fn, 'w') as f:
+        json.dump({"path_ckpt": path_ckpt, "acc": acc, "acc": acc, "texts_gt": texts_gt, "texts_gen": texts_gen, "history": history}, f, indent=4)
+    logger.info(f"Saved results to {fn}")

@@ -147,7 +147,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, src_sbbox=sbbox) for d in dialogs]
 
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -166,7 +166,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, human_first=True) for d in dialogs]
 
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -185,7 +185,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, 0) for d in dialogs]
 
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -202,7 +202,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, 0, human_first=True) for d in dialogs]
 
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -219,7 +219,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d) for d in dialogs]
 
         weights = [1, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -241,7 +241,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, 0, human_first=True) for d in dialogs]
 
         weights = [9, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         tgt_text = " not yet." + tgt_text if style == 1 else tgt_text
@@ -265,7 +265,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(dialogs[0], 1, src_sbbox=sbbox), MapFunc.make_text_pair(dialogs[1], 0, src_sbbox=sbbox)]
 
         weights = [9, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         # tgt_text = "not yet. " + tgt_text if style == 1 else tgt_text
@@ -289,7 +289,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, human_first=True) for d in dialogs]
 
         weights = [9, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         tgt_text = " sure." + tgt_text if style == 1 else tgt_text
@@ -313,7 +313,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, 0) for d in dialogs]
 
         weights = [9, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         tgt_text = " not yet." + tgt_text if style == 1 else tgt_text
@@ -334,7 +334,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d, 0, human_first=True, src_sbbox=sbbox) for d in dialogs]
 
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         # tgt_text = "not yet. " + tgt_text if style == 1 else tgt_text
@@ -356,7 +356,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d) for d in dialogs]
 
         weights = [9, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         tgt_text = " sure." + tgt_text if style == 1 else tgt_text
@@ -405,7 +405,7 @@ class MapFunc():
             f" there is no {false_c}.",
         ]
         weights = [2, 2, 3, 2, 1]
-        style = style if style else random.choices(range(len(src_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(src_candidate)), weights=weights)[0]
         src_text = src_candidate[style].lower()
         tgt_text = tgt_candidate[style].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -444,7 +444,7 @@ class MapFunc():
         text_candidate = [MapFunc.make_text_pair(d) for d in dialogs]
 
         weights = [2, 2, 3, 2, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -461,7 +461,7 @@ class MapFunc():
                    ["describe the image.", caption]]
         text_candidate = [MapFunc.make_text_pair(d) for d in dialogs]
         weights = [1, 1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -479,7 +479,7 @@ class MapFunc():
         dialog = ["answer the question.", *dialog]
         text_candidate = [MapFunc.make_text_pair(dialog, 0, human_first=True)]
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -497,7 +497,7 @@ class MapFunc():
         dialog = ["answer the question.", *dialog]
         text_candidate = [MapFunc.make_text_pair(dialog, 0, human_first=True)]
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -514,7 +514,7 @@ class MapFunc():
         dialog = [j for i in dialog for j in i]
         text_candidate = [MapFunc.make_text_pair(dialog)]
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
@@ -531,7 +531,7 @@ class MapFunc():
         dialog = [j for i in dialog for j in i]
         text_candidate = [MapFunc.make_text_pair(dialog)]
         weights = [1]
-        style = style if style else random.choices(range(len(text_candidate)), weights=weights)[0]
+        style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()
         return {"src_text": src_text, "tgt_text": tgt_text, "image": image}
