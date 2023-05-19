@@ -2,7 +2,7 @@
 env:
     path_ofa: "/mnt/bn/hri-lq/projects/VLDD/OFA"
     path_invig: "/mnt/bn/hri-lq/projects/VLDD/OFA-Invig"
-    path_tokenizer: "/mnt/bn/hri-lq/huggingface_hub/TiO"
+    path_tokenizer: "/mnt/bn/hri-lq/huggingface_hub/tio"
     path_exclude_images: "/mnt/bn/hri-lq/datasets/hf-cache/test_images.json"
     path_images:
         coco: "/mnt/bn/hri-lq/datasets/images/coco"
