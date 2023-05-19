@@ -32,7 +32,7 @@ from fairseq import utils
 utils.import_user_module(argparse.Namespace(**{"user_dir": f"{cfg['env']['path_invig']}/ofa_invig"}))
 
 # 载入transformers
-from ofa_invig.ofa.tokenization_ofa import OFATokenizer
+from src.transformers_ofa.tokenization_ofa import OFATokenizer
 from datasets.distributed import split_dataset_by_node
 from datasets import load_from_disk
 import transformers
@@ -40,10 +40,10 @@ import datasets
 
 # 载入OFA的模块 自己invig的模块
 from utils import checkpoint_utils
-from ofa_invig.dialog_dataset import MapFunc, DataCollatorForOFA
-from ofa_invig.common import world_info_from_env, get_processor, sbbox_to_bbox, bbox_to_sbbox
-from ofa_invig.common import OFAModelWarper
-from ofa_invig.evaluation import eval_grounding_acc_v2
+from src.legacy.dialog_dataset import MapFunc, DataCollatorForOFA
+from src.common import world_info_from_env, get_processor, sbbox_to_bbox, bbox_to_sbbox
+from src.common import OFAModelWarper
+from src.evaluation import eval_grounding_acc_v2
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     try:
         if task_name in ['invig_grounding', 'guesswhat_grounding']:
             # 2 load dataset
-            from ofa_invig.dialog_dataset import OFADataset
+            from src.legacy.dialog_dataset import OFADataset
             test_config = MapFunc.cfg['test'][task_name]
             task = test_config['task']
             ds = datasets.load_from_disk(test_config['path'])['test']
@@ -180,7 +180,7 @@ if __name__ == "__main__":
 
         elif task_name in ['guesswhat_oracle']:
             # 2 load dataset
-            from ofa_invig.dialog_dataset import OFADataset
+            from src.legacy.dialog_dataset import OFADataset
             test_config = MapFunc.cfg['test'][task_name]
             task = test_config['task']
             ds = datasets.load_from_disk(test_config['path'])['test']
@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
         elif task_name in ['invig_grounding_end2end', 'guesswhat_grounding_end2end']:
             # 2 load dataset
-            from ofa_invig.dialog_dataset import OFADataset
+            from src.legacy.dialog_dataset import OFADataset
             test_config = MapFunc.cfg['test'][task_name]
             task = test_config['task']
             ds = datasets.load_from_disk(test_config['path'])['test']

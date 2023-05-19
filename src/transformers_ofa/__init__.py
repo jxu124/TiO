@@ -16,6 +16,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import TYPE_CHECKING
+from .tokenization_ofa import *
+from .tokenization_ofa_fast import *
+from .modeling_ofa import *
 
 # rely on isort to merge the imports
 # from ...file_utils import _LazyModule, is_tokenizers_available, is_torch_available

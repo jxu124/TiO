@@ -44,8 +44,8 @@ import datasets
         
 # 载入OFA的模块 自己invig的模块
 from utils import checkpoint_utils
-from src.dialog_dataset import TaskProcessor, DataCollatorForOFA, OFADataset
-from src.dialog_dataset import LoadImage
+from src.legacy.dialog_dataset import TaskProcessor, DataCollatorForOFA, OFADataset
+from src.legacy.dialog_dataset import LoadImage
 from src.common import world_info_from_env, get_image_processor, sbbox_to_bbox, bbox_to_sbbox
 from src.common import sbbox_to_bbox
 from src.evaluation import eval_grounding_acc_v2
@@ -72,16 +72,19 @@ def make_a_dialog(data, model):
     sbbox = bbox_to_sbbox(bbox, *image.size)
 
     # 第一轮：人类提出query
-    src_text = f" \n#instruction: say a word about the region. \n#region: {sbbox}"
-    gen_text = model.generate([src_text], [image])[0].strip()
-    context = f"query: {gen_text}"
-    all_dialogs = [("", gen_text)]
-    print(f"[Turn 1] query: {gen_text}")
-    logs = f"[Turn 1] query: {gen_text}\n"
+    # src_text = f" \n#instruction: say a word about the region. \n#region: {sbbox}"
+    # gen_text = model.generate([src_text], [image])[0].strip()
+    # context = f"query: {gen_text}"
+    # all_dialogs = [("", gen_text)]
+    # print(f"[Turn 1] query: {gen_text}")
+    # logs = f"[Turn 1] query: {gen_text}\n"
+    context = "query: guess what i want."
+    all_dialogs = []
+    logs = ""
 
     # 第二轮之后：循环直到给出bbox
     dialog_loop = True
-    for turn in range(2, 10+1):  # max_turn = 10
+    for turn in range(1, 10+1):  # max_turn = 10
         # 提问
         if turn >= 10:  # 强行结束
             src_text = f" \n#instruction: which region does the context describe? \n#context: \"{context}\""
@@ -99,7 +102,7 @@ def make_a_dialog(data, model):
             break
 
         # 回答
-        src_text = f" \n#instruction: answer the question according to the region and context. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\""
+        src_text = f" \n#instruction: answer the question with yes or no. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\""
         # src_text = f" \n#instruction: answer the question in detail. \n#region: {sbbox}\n#context: \"{context}\"\n#question: \"{question}\""
         gen_text = model.generate([src_text], [image])[0].strip()
         answer = gen_text
@@ -158,11 +161,11 @@ if __name__ == "__main__":
     logger.info(f"Test Oracle Acc on {path_ckpt}")
 
     # 2 load dataset
-    path_dataset = "/mnt/bn/hri-lq/datasets/hf/invig"
+    path_dataset = "/mnt/bn/hri-lq/datasets/hf/guesswhat-success"
     split = "test"
-    ds = TaskProcessor.setup_task(load_from_disk(path_dataset)[split], "invig_grounding")
-    ds_ofa = OFADataset(ds, config['path_images'], model.tokenizer, model.image_processor)
-    # loader = torch.utils.data.DataLoader(ds_ofa, batch_size=main_args.batch_size, num_workers=1, collate_fn=ds_ofa.collater)
+    ds = TaskProcessor.setup_task(load_from_disk(path_dataset)[split], "guesswhat_grounding")
+    ds = OFADataset(ds, config['path_images'], model.tokenizer, model.image_processor)
+    # loader = torch.utils.data.DataLoader(ds, batch_size=main_args.batch_size, num_workers=1, collate_fn=ds.collater)
 
     # 3 benchmark
     results_dir = "./results"
@@ -173,9 +176,9 @@ if __name__ == "__main__":
     logger.info(f"results_dir: {results_dir}")
 
     records = []
-    t = tqdm(range(len(ds_ofa)))
+    t = tqdm(range(len(ds)))
     for i in t:
-        ret = make_a_dialog(ds_ofa[i], model)
+        ret = make_a_dialog(ds[i], model)
         s = make_markdown(ret, results_dir)
         with open(f"{results_dir}/readme.md", "a") as f:
             f.write(s)
@@ -189,5 +192,5 @@ if __name__ == "__main__":
 # SR = {sum(records) / len(records):.5f}
 - ckpt - {path_ckpt}
 - dataset - {path_dataset} ({split} split)
-- size - {len(ds_ofa)}
+- size - {len(ds)}
 """)

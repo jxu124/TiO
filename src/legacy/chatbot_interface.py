@@ -23,8 +23,8 @@ from fairseq import utils
 utils.import_user_module(argparse.Namespace(**{"user_dir": f"{cfg['env']['path_invig']}/ofa_invig"}))
 
 # 载入OFA的模块 自己invig的模块
-from ofa_invig.dialog_dataset import MapFunc, DataCollatorForOFA
-from ofa_invig.common import OFAModelWarper, bbox_to_sbbox, sbbox_to_bbox
+from src.legacy.dialog_dataset import MapFunc, DataCollatorForOFA
+from src.common import OFAModelWarper, bbox_to_sbbox, sbbox_to_bbox
 # from ofa_invig.
 
 logging.basicConfig(

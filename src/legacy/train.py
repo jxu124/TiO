@@ -37,7 +37,7 @@ import datasets
 # 载入OFA的模块 自己invig的模块
 from utils import checkpoint_utils
 from src.common import sbbox_to_bbox, get_processor
-from src.dialog_dataset import collate_ofa_fairseq
+from src.legacy.dialog_dataset import collate_ofa_fairseq
 from src.evaluation import eval_grounding_acc_v2
 
 
@@ -66,7 +66,7 @@ tokenizer, image_processor = get_processor(resolution=512)
 
 from torch.utils.data import DataLoader
 from datasets import load_from_disk
-from src.dialog_dataset import TaskProcessor, OFADataset
+from src.legacy.dialog_dataset import TaskProcessor, OFADataset
 
 tokenizer, img_processor = get_processor(resolution=512)
 

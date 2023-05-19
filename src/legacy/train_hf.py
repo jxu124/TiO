@@ -32,7 +32,7 @@ from fairseq import utils
 utils.import_user_module(argparse.Namespace(**{"user_dir": f"{cfg['env']['path_invig']}/ofa_invig"}))
 
 # 载入transformers
-from ofa_invig.ofa.tokenization_ofa import OFATokenizer
+from src.transformers_ofa.tokenization_ofa import OFATokenizer
 from datasets.distributed import split_dataset_by_node
 from datasets import load_from_disk
 import transformers
@@ -40,10 +40,10 @@ import datasets
 
 # 载入OFA的模块 自己invig的模块
 from utils import checkpoint_utils
-from ofa_invig.dialog_dataset import MapFunc, DataCollatorForOFA, get_dataset
-from ofa_invig.common import world_info_from_env, get_processor, sbbox_to_bbox, bbox_to_sbbox
-from ofa_invig.common import OFAModelWarper
-from ofa_invig.evaluation import eval_grounding_acc_v2
+from src.legacy.dialog_dataset import MapFunc, DataCollatorForOFA, get_dataset
+from src.common import world_info_from_env, get_processor, sbbox_to_bbox, bbox_to_sbbox
+from src.common import OFAModelWarper
+from src.evaluation import eval_grounding_acc_v2
 
 
 logging.basicConfig(

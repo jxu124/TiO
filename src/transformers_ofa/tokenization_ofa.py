@@ -64,8 +64,8 @@ class OFATokenizer(BartTokenizer):
 
     @classmethod
     def from_pretrained(cls,pretrained_model_name_or_path: Union[str, os.PathLike], *init_inputs, **kwargs):
-        print(pretrained_model_name_or_path)
-        print(super())
+        # print(pretrained_model_name_or_path)
+        # print(super())
         tokenizer = super().from_pretrained(pretrained_model_name_or_path, *init_inputs, **kwargs)
         tokenizer.add_tokens(["<code_{}>".format(i) for i in range(8192)])
         tokenizer.add_tokens(["<bin_{}>".format(i) for i in range(1000)])

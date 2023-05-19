@@ -1,29 +1,25 @@
 #!/usr/bin/env
 
 # ==== 基本参数 ====
-num_gpus=8
+num_gpus=1
 PATH_D_INVIG=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig
 PATH_D_OFA=/mnt/bn/hri-lq/projects/VLDD/OFA
 PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 
 # ==== 预训练模型 ====
+config_yaml=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_env.yml
 restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_large.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_last.pt  # best?
 
 # ==== 训练数据 ====
 data="invig,invig"
 selected_cols=0
-python3 -c "from g2p_en import G2p"
 
 # ==== 日志参数 ====
 log_dir=${PATH_D_LOG}/invig_large_grounding_logs_debug
 save_dir=${PATH_D_LOG}/invig_large_grounding_checkpoints_debug
 mkdir -p $log_dir $save_dir
 bpe_dir=${PATH_D_OFA}/utils/BPE
-user_dir=${PATH_D_INVIG}/ofa_invig
+user_dir=${PATH_D_INVIG}/src/tio_module
 cd $user_dir
 
 # ==== 环境设置(无需更改) ====
@@ -46,9 +42,6 @@ attention_dropout=0.0
 max_src_length=280
 max_tgt_length=80
 num_bins=1000
-# lr=3e-5
-# max_epoch=5
-# patch_image_size=512
 
 subfix=`date "+%Y%m%d-%H%M"`
 
@@ -68,6 +61,7 @@ for max_epoch in 10; do
       # python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
       python3 -m torch.distributed.launch --nproc_per_node=${num_gpus} --master_port=${MASTER_PORT} ${PATH_D_OFA}/train.py \
           $data \
+          --config-yaml=${config_yaml} \
           --selected-cols=${selected_cols} \
           --bpe-dir=${bpe_dir} \
           --user-dir=${user_dir} \

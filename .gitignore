@@ -9,3 +9,4 @@
 **/runs**
 **/results**
 *.vscode
+.ipynb_checkpoints
