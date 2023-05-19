@@ -9,17 +9,6 @@ PATH_D_LOG=/mnt/bn/ckpt-lq/vldd
 # ==== 预训练模型 ====
 config_yaml=/mnt/bn/hri-lq/projects/VLDD/OFA-Invig/config/invig_env.yml
 restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_huge.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_checkpoints/10_3e-5_512_20230424-2228/checkpoint_last.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230425-0955/checkpoint_last.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230425-1915/checkpoint_2_7000.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230426-0356/checkpoint_2_12000.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230427-1312/checkpoint_1_2000.pt
-restore_file=/mnt/bn/ckpt-lq/vldd/invig_huge_grounding_checkpoints/10_3e-5_512_20230428-1407/checkpoint_9_52000.pt
-restore_file=/mnt/bn/hri-lq/projects/VLDD/OFA-checkpoints/ofa_huge.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_2e-5_512_20230417-1746/checkpoint_best.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints_debug/10_1e-5_512_20230418-1555/checkpoint_last.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230419-1954/checkpoint_last.pt
-# restore_file=/mnt/bn/ckpt-lq/vldd/invig_large_grounding_checkpoints/10_3e-5_512_20230420-0135/checkpoint_last.pt  # best?
 
 # ==== 训练数据 ====
 data="invig,invig"
