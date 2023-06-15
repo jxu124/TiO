@@ -1,0 +1,15 @@
+**/__pycache__
+*.ipynb
+**/.ipynb_checkpoints/**
+**/output/**
+**/lightning_logs/**
+**/wandb/**
+*.log
+*.out
+**/runs**
+**/results**
+*.vscode
+.ipynb_checkpoints
+xvlm_logs
+*.pt
+attachments/OFA
