@@ -9,3 +9,4 @@ git
 ca-certificates
 ffmpeg
 python3-opencv
+aria2c

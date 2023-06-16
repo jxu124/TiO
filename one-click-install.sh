@@ -11,7 +11,7 @@ git clone https://github.com/OFA-Sys/OFA.git
 cd ..
 
 # 4 get weights
-wget -c https://huggingface.co/jxu124/tio-checkpoint-zoo/resolve/main/ckpts/tio-huge/checkpoint.best_score_0.7630.pt -o ./attachments/checkpoint.pt
+aria2c -c https://huggingface.co/jxu124/tio-checkpoint-zoo/resolve/main/ckpts/checkpoint.1_0_0.pt -o ./attachments/checkpoint.pt
 
 # 5 start!
 python3 app.py --share
