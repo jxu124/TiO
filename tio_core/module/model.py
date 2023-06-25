@@ -1,18 +1,18 @@
 
 from typing import Optional, Any, Union, List
+import logging
 import torch
 import numpy as np
-from tio_utils import TiOConfig
 
-import logging
+from ..utils import TiOConfig
+from .. import path_ofa, path_config, path_ckpt
+
 logger = logging.getLogger(__name__)
 
 
 class OFAModelWarper(torch.nn.Module):
-    def __init__(self, ckpt_path, config_path):
+    def __init__(self, ckpt_path=path_ckpt):
         super().__init__()
-        self.config_path = config_path
-        self.tio_config = TiOConfig(config_path)
         self.gens = self.load_from_pretrain(ckpt_path)
         self.model = self.gens[1]
         self.tokenizer, self.image_processor = self.task.tio_config.tokenizer, self.task.tio_config.image_processor
@@ -40,7 +40,7 @@ class OFAModelWarper(torch.nn.Module):
     def load_from_pretrain(self, ckpt_path):
         from utils import checkpoint_utils
         logger.info("Loading...")
-        model_overrides = {"bpe_dir": f"{self.tio_config.cfg['env']['path_ofa']}/utils/BPE", "config_yaml": self.config_path}
+        model_overrides = {"bpe_dir": f"{path_ofa}/utils/BPE", "config_yaml": path_config}
         models, cfg, task = checkpoint_utils.load_model_ensemble_and_task([ckpt_path], model_overrides)
         model = models[0]
         model.eval()

@@ -47,7 +47,7 @@ def bbox_to_sbbox(bbox, w=None, h=None, num_bins=1000):
 
 def get_processor(pretrain_path='jxu124/TiO', resolution=512):
     """ get_processor() -> return (tokenizer, image_processor) """
-    from transformers_ofa.tokenization_ofa import OFATokenizer
+    from ..transformers_ofa.tokenization_ofa import OFATokenizer
     tokenizer = OFATokenizer.from_pretrained(pretrain_path, truncation_side="left")
     image_processor = transformers.AutoImageProcessor.from_pretrained(pretrain_path, size=resolution)
     return (tokenizer, image_processor)

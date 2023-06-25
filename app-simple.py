@@ -9,7 +9,6 @@ import re
 from io import BytesIO
 from PIL import Image
 import numpy as np
-import yaml
 import torch
 import torch.backends.cudnn as cudnn
 import gradio as gr
@@ -39,10 +38,19 @@ CONV_VISION = {}
 
 # ######################### configuration ##########################
 ckpt_path = "attachments/checkpoint.pt"
+config_path = "config/invig_env.yml"
 
-from tio_core.utils import sbbox_to_bbox
-from tio_core.module import OFAModelWarper
-model = OFAModelWarper(ckpt_path)
+sys.path.append("src")
+
+from tio_utils import TiOConfig, sbbox_to_bbox
+tio_config = TiOConfig(config_path)
+sys.path.append(tio_config.cfg['env']['path_ofa'])
+
+from fairseq.utils import import_user_module
+import_user_module(argparse.Namespace(**{"user_dir": f"src/tio_module"}))
+
+from tio_module import OFAModelWarper
+model = OFAModelWarper(ckpt_path, config_path)
 
 print('Initialization Finished')
 
@@ -115,7 +123,7 @@ def gradio_answer(chatbot, chat_state, img_list, option):
     prompt_style = 1 if option == 2 else 0
     llm_message = chat.answer(conv=chat_state, img_list=img_list, max_new_tokens=300, max_length=2000, prompt_style=prompt_style)[0]
     bbox = get_bbox(llm_message)
-    if option == 1:  # "Freeform (w/ Grounding)":
+    if option == "Freeform(w/ Grounding)":
         chat.src_text += f" agent: {llm_message}\n"
         llm_message_gnding = chat.answer(conv=chat_state, img_list=img_list, max_new_tokens=300, max_length=2000, prompt_style=2)[0]
         bbox = get_bbox(llm_message_gnding)

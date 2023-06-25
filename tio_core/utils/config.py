@@ -13,6 +13,7 @@ import numpy as np
 
 # self library
 from .data import get_processor
+from .. import path_tokenizer
 
 
 import logging
@@ -55,7 +56,7 @@ class TiOConfig():
         return self._test_images
 
     def get_processor(self):
-        self._tokenizer, self._image_processor = get_processor(pretrain_path=self.cfg['env']['path_tokenizer'])
+        self._tokenizer, self._image_processor = get_processor(pretrain_path=path_tokenizer)
         return self.tokenizer, self.image_processor
 
     def filter_exclude_test_images(self, global_image_id):

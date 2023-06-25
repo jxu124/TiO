@@ -20,8 +20,8 @@ from fairseq.tasks import register_task
 from tasks.ofa_task import OFATask, OFAConfig
 
 # ***
-from tio_utils import TiOConfig, sbbox_to_bbox
 from .dataset import TiODataset
+from ..utils import TiOConfig, sbbox_to_bbox
 
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,5 @@
 
 env:
-    path_ofa: "./attachments/OFA"
-    path_tokenizer: "./attachments/tio"
     path_exclude_images: "./attachments/test_images.json"
     path_images:
         coco: "/path/to/images/coco"

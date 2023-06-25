@@ -3,7 +3,7 @@ from datasets.distributed import split_dataset_by_node
 import datasets
 import argparse
 
-from tio_utils import DataCollator, DataPrompt, TiOConfig, world_info_from_env
+from ..utils import DataCollator, DataPrompt, TiOConfig, world_info_from_env
 
 
 datasets.config.IN_MEMORY_MAX_SIZE = 1_024_000_000  # 1GB

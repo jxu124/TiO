@@ -7,7 +7,7 @@ PATH_D_OFA=
 PATH_D_LOG=
 
 # ====  ====
-config_yaml=./config/invig_env.yml
+config_yaml=./config/training.yml
 restore_file=./attachments/pretrain.pt
 
 # ====  ====
