@@ -5,6 +5,7 @@ import sys
 import os
 import random
 import re
+import pathlib
 
 from io import BytesIO
 from PIL import Image
@@ -38,11 +39,9 @@ print('Initializing Chat')
 CONV_VISION = {}
 
 # ######################### configuration ##########################
-ckpt_path = "attachments/checkpoint.pt"
-
 from tio_core.utils import sbbox_to_bbox
 from tio_core.module import OFAModelWarper
-model = OFAModelWarper(ckpt_path)
+model = OFAModelWarper()
 
 print('Initialization Finished')
 

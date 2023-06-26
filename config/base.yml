@@ -1,4 +1,4 @@
 path_ofa: "attachments/OFA"
 path_ckpt: "attachments/checkpoint.pt"
 path_tokenizer: "attachments/tio"
-path_config: "config/training.yml"
+path_training_config: "config/training.yml"
