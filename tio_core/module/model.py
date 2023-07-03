@@ -50,6 +50,7 @@ class OFAModelWarper(torch.nn.Module):
         model = models[0]
         model.eval()
         # model.prepare_for_inference_(cfg)
+        cfg.generation.max_len_b = 1024
         generator = task.build_generator(models, cfg.generation)
         logger.info("Load Completed.")
         return generator, model, cfg, task
