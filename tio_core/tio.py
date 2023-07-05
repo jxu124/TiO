@@ -5,13 +5,15 @@ from __future__ import annotations
 from PIL import Image as PILImage
 import numpy as np
 
-from tio_core import path_ckpt
 from tio_core.utils import sbbox_to_bbox
-from tio_core.module import OFAModelWarper
 
 
 class ChatTiO():
-    def __init__(self, path_ckpt=path_ckpt):
+    def __init__(self, path_ckpt=None):
+        from tio_core import path_ckpt as path_ckpt_default
+        from tio_core.module import OFAModelWarper
+        if path_ckpt is None:
+            path_ckpt = path_ckpt_default
         self.model = OFAModelWarper(path_ckpt)
         print('Initialization Finished')
 
@@ -72,7 +74,7 @@ class ChatTiOClient():
     def reset(self):
         pass
 
-    def chat(self, image: PILImage.Image, text: str, dialog = [], *args):
+    def chat(self, image: PILImage.Image, text: str, dialog = [], *args, **known_args):
         def get_bboxes(message):
             if "region:" in message:
                 bboxes = sbbox_to_bbox(message) * np.asarray([*image.size, *image.size])
@@ -84,6 +86,7 @@ class ChatTiOClient():
         # 获取对话结果
         text_dialog = "".join([f" human: {i[0]}\n agent: {i[1]}\n" for i in dialog])
         text_dialog += f" human: {text}\n"
+        text_dialog = getattr(self, "prompt", "") + text_dialog
         text_response = self.model(image, text_dialog.lower())
         bboxes_1 = get_bboxes(text_response)
 
