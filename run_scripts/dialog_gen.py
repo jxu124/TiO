@@ -108,8 +108,8 @@ def gen_dialog(item, model):
     }
 
 
-def load_ds(index=0):
-    data_files = [f"hdfs:///home/byte_ailab_roboticsresearch/user/xujie/hf_datasets/sam/sam-{index:06d}-of-010000.parquet"]
+def load_ds(start=0, end=1):
+    data_files = [f"hdfs:///home/byte_ailab_roboticsresearch/user/xujie/hf_datasets/sam/sam-{i:06d}-of-010000.parquet" for i in range(start, end)]
     ds = datasets.load_dataset("parquet", split="train", data_files=data_files, streaming=True)
     return ds
 
@@ -119,12 +119,13 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--server", type=str, default="http://127.0.0.1:7860/")
-    parser.add_argument("--index", type=int)
+    parser.add_argument("--start", type=int)
+    parser.add_argument("--end", type=int)
     parser.add_argument("--save_to", type=str)
     args = parser.parse_args()
 
     model = get_model(args.server)
-    ds = load_ds(args.index)
+    ds = load_ds(args.start, args.end)
     save_dir = args.save_to
 
     for item in tqdm(ds):
