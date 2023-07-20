@@ -28,12 +28,8 @@ def setup_seeds():
 #             Model Initialization
 # ========================================
 
-print('Initializing Chat')
 from tio_core.utils import sbbox_to_bbox
 from tio_core.module import OFAModelWarper
-setup_seeds()
-model = OFAModelWarper()
-print('Initialization Finished')
 
 # ========================================
 #             Gradio Setting
@@ -103,6 +99,17 @@ with gr.Blocks() as demo:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Demo")
+    parser.add_argument("--ckpt", type=str, default=None)
     parser.add_argument("--share", action="store_true")
+    parser.add_argument("--port", type=int, default=7860)
     args = parser.parse_args()
-    demo.queue(1).launch(enable_queue=True, server_name="0.0.0.0", share=args.share)
+
+    print('Initializing Chat')
+    setup_seeds()
+    model = OFAModelWarper(args.ckpt)
+    print('Initialization Finished')
+
+    port = args.port
+
+    print(f"Run TiO server on 0.0.0.0:{port}")
+    demo.queue(1).launch(enable_queue=True, server_name="0.0.0.0", server_port=port, share=args.share)

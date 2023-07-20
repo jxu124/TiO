@@ -96,7 +96,7 @@ class DataPrompt:
         sbbox = bbox_to_sbbox(bbox, *image.size)
         # ***
         caption = random.choice(features['captions'])
-        dialogs = [["which region does the following text describe?", caption, f"region: {sbbox}"]]
+        dialogs = [["which region does the context describe?", caption, f"region: {sbbox}"]]
         text_candidate = [DataPrompt.make_text_pair(d, human_first=True) for d in dialogs]
 
         weights = [1]
@@ -318,8 +318,9 @@ class DataPrompt:
         c, num = random.choice(Counter(categorys).most_common())
         mask = [i == c for i in categorys]
         bboxes = bboxes[np.where(mask)].tolist()
-        bboxes.sort(key=lambda a: a[0] * 100 + a[1])
-        sbboxes = [bbox_to_sbbox(bbox) for bbox in bboxes]
+        # bboxes.sort(key=lambda a: a[0] * 100 + a[1])
+        # sbboxes = [bbox_to_sbbox(bbox) for bbox in bboxes]
+        sbboxes = list(set([bbox_to_sbbox(b) for b in sorted(np.asarray(bboxes).tolist())]))
         # ***
         num_less = num - random.randint(0, num - 1)
         num_more = num + random.randint(1, 4)
@@ -330,12 +331,14 @@ class DataPrompt:
 
         dialogs = [[f"point out the location of any {num_less} {c}.", f" there are {num} {c}. here are {num_less} of them.\n" + "\n".join([f"- region: {sbbox}" for sbbox in random.choices(sbboxes, k=num_less)])],
                    [f"point out the location of any {num_more} {c}.", f" there are only {num} {c}.\n" + "\n".join([f"- region: {sbbox}" for sbbox in sbboxes])],
-                   [f"where are {c} located?", f" there are {num} {c}.\n" + "\n".join([f"- region: {sbbox}" for sbbox in sbboxes])],
+                   [f"where are {c} located?", f" there are {num} {c}.\n" + "\n".join([f" region: {sbbox}" for sbbox in sbboxes])],
                    [f"how many {c} are there? where are they located?", f" there are {num} {c}.\n" + "\n".join([f"- region: {sbbox}" for sbbox in sbboxes])],
-                   [f"how many {false_c} are there? where are they located?", f" there is no {false_c}."]]
+                   [f"where are {false_c} located?", f" there is no {false_c}."],
+                   [f"which region does the context describe? #context: {c}", "\n".join([f" region: {sbbox}" for sbbox in sbboxes])]]
         text_candidate = [DataPrompt.make_text_pair(d) for d in dialogs]
 
         weights = [2, 2, 3, 2, 1]
+        weights = [0, 0, 1, 0, 1, 9]
         style = style if style is not None else random.choices(range(len(text_candidate)), weights=weights)[0]
         src_text = text_candidate[style][0].lower()
         tgt_text = text_candidate[style][1].lower()

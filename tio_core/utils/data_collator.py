@@ -20,7 +20,7 @@ class DataCollator(transformers.DataCollatorForSeq2Seq):
     return_tensors: Optional[str] = "pt"
 
     def __call__(self, features):
-        from tools import world_info_from_env
+        from .training import world_info_from_env
         """ features: [{'src_text', 'tgt_text', 'image'}, ...] -> {...} """
         import torch
         src_texts = [f['src_text'] for f in features]

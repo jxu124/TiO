@@ -15,3 +15,5 @@ xvlm_logs
 attachments/OFA
 attachments/datasets
 data
+trainer_logs
+projects

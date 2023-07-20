@@ -12,13 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 class OFAModelWarper(torch.nn.Module):
-    def __init__(self, path_ckpt=path_ckpt):
+    def __init__(self, load_from=None):
         super().__init__()
         # 自动配置ckpt
-        if not os.path.exists(path_ckpt):
+        if load_from is None:
+            load_from = path_ckpt
+        if not os.path.exists(load_from):
             from huggingface_hub import hf_hub_download
-            path_ckpt = hf_hub_download("jxu124/tio-checkpoint-zoo", "checkpoint.1_0_0.pt", subfolder="ckpts")
-        self.gens = self.load_from_pretrain(path_ckpt)
+            load_from = hf_hub_download("jxu124/tio-checkpoint-zoo", "checkpoint.1_0_0.pt", subfolder="ckpts")
+        self.gens = self.load_from_pretrain(load_from)
         self.model = self.gens[1]
         self.tokenizer, self.image_processor = self.task.tio_config.tokenizer, self.task.tio_config.image_processor
         # for huggingface trainer
@@ -42,11 +44,12 @@ class OFAModelWarper(torch.nn.Module):
                                                  ignore_index=self.tokenizer.pad_token_id, label_smoothing=0.1)
         return Seq2SeqLMOutput(loss=loss, logits=lprobs)
 
-    def load_from_pretrain(self, path_ckpt):
+    @staticmethod
+    def load_from_pretrain(load_from):
         from utils import checkpoint_utils
-        logger.info("Loading...")
+        logger.info(f"Loading from {load_from}...")
         model_overrides = {"bpe_dir": f"{path_ofa}/utils/BPE", "config_yaml": path_training_config}
-        models, cfg, task = checkpoint_utils.load_model_ensemble_and_task([path_ckpt], model_overrides)
+        models, cfg, task = checkpoint_utils.load_model_ensemble_and_task([load_from], model_overrides)
         model = models[0]
         model.eval()
         # model.prepare_for_inference_(cfg)

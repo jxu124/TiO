@@ -12,8 +12,8 @@ import yaml
 import numpy as np
 
 # self library
-from .data import get_processor
-from .. import path_tokenizer
+from tio_core.utils.data import get_processor
+from tio_core import path_tokenizer
 
 
 import logging
