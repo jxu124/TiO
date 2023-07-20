@@ -15,7 +15,7 @@ batch_size=4
 update_freq=4
 patch_image_size=512
 restore_file=./attachments/ofa_huge.pt
-restore_file=/mnt/bn/hri-lq/projects/TiO/attachments/checkpoint.pt
+restore_file=./attachments/checkpoint.pt
 
 
 # ***** 路径配置 *****
