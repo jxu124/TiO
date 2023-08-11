@@ -5,6 +5,7 @@ import sys
 import os
 import random
 import re
+import json
 
 from io import BytesIO
 from PIL import Image
@@ -30,6 +31,31 @@ def setup_seeds():
 
 from tio_core.utils import sbbox_to_bbox
 from tio_core.module import OFAModelWarper
+
+
+def get_sam_predictor():
+    global predictor
+    if predictor is None:
+        # 自动配置sam环境
+        try:
+            # 初始化sam
+            from segment_anything import sam_model_registry, SamPredictor
+            sam_checkpoint = "./attachments/sam_vit_h_4b8939.pth"
+            model_type = "vit_h"
+            device = "cuda"
+            sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+            sam.to(device=device)
+            predictor = SamPredictor(sam)
+        except ImportError:
+            # os.system("pip install git+https://github.com/facebookresearch/segment-anything.git")
+            os.system("cd attachments && git clone https://github.com/facebookresearch/segment-anything.git")
+            os.system("pip install setuptools==58.0")
+            os.system("sudo pip install ./attachments/segment-anything")
+            os.system("pip install opencv-python pycocotools matplotlib onnxruntime onnx")
+            os.system("cd attachments && wget -c https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth")
+            predictor = get_sam_predictor()
+    return predictor
+predictor = None
 
 # ========================================
 #             Gradio Setting
@@ -76,6 +102,20 @@ def gradio_predict(image, text_input):
     return model.generate([text_input], [image])[0]
 
 
+def gradio_sam_api(image, bbox):
+    predictor = get_sam_predictor()
+
+    predictor.set_image(np.asarray(image))
+    input_box = np.asarray(json.loads(bbox), dtype=float).reshape(4) * np.asarray([*image.size, *image.size])
+    masks, _, _ = predictor.predict(
+        point_coords=None,
+        point_labels=None,
+        box=input_box[None, :],
+        multimask_output=False,
+    )
+    return json.dumps(masks[0].astype(np.uint8).tolist())
+
+
 with gr.Blocks() as demo:
     gr.Markdown("""<h1 align="center">Demo of TiO</h1>""")
 
@@ -95,6 +135,11 @@ with gr.Blocks() as demo:
     gr_text_input.submit(gradio_chat, [gr_image, gr_text_input, gr_chatbot], [gr_image_bbox, gr_chatbot], 
                          api_name="chat").then(lambda : None, [], [gr_text_input])
     gr_chat_button.click(gradio_predict, [gr_image, gr_text_input], [gr_text_input], api_name="single_chat")
+
+    # for sam
+    gr_bbox = gr.Textbox(label='bbox', visible=False)
+    gr_mask = gr.Textbox(label='mask', visible=False)
+    gr_mask.change(gradio_sam_api, [gr_image, gr_bbox], [gr_mask], api_name="sam")
 
 
 if __name__ == "__main__":
