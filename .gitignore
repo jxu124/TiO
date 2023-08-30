@@ -12,8 +12,11 @@
 .ipynb_checkpoints
 xvlm_logs
 *.pt
-attachments/OFA
+*.pth
+attachments/*
 attachments/datasets
+attachments/segment-anything
 data
 trainer_logs
 projects
+venv

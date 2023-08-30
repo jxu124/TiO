@@ -39,9 +39,13 @@ class OFAModelWarper(torch.nn.Module):
         from transformers.modeling_outputs import Seq2SeqLMOutput
         net_output = self.model(**batch['net_input'])
         lprobs = self.model.get_normalized_probs(net_output, log_probs=True)
-        target = self.model.get_targets(batch, net_output)
-        loss = torch.nn.functional.cross_entropy(lprobs.view(-1, 59457), target.view(-1),
-                                                 ignore_index=self.tokenizer.pad_token_id, label_smoothing=0.1)
+        if "target" in batch:
+            target = self.model.get_targets(batch, net_output)
+            # .softmax(dim=1)
+            loss = torch.nn.functional.cross_entropy(lprobs.view(-1, 59457), target.view(-1),
+                                                     ignore_index=self.tokenizer.pad_token_id, label_smoothing=0.1)
+        else:
+            loss = None
         return Seq2SeqLMOutput(loss=loss, logits=lprobs)
 
     @staticmethod
@@ -72,6 +76,10 @@ class OFAModelWarper(torch.nn.Module):
         return self.tokenizer.batch_decode(hypos, skip_special_tokens=True)
 
     def generate(self, src_texts: List[str], images: List[Any], dtype=torch.float16, device='cuda'):
+        sample = self.make_sample(src_texts, images)
+        return self.generate_origin(sample, dtype=torch.float16, device='cuda')
+
+    def make_sample(self, src_texts: List[str], images: List[Any]):
         src_inputs = self.tokenizer(src_texts, return_length=True, padding=True, return_tensors="pt")
         src_tokens = src_inputs.input_ids
         src_lengths = src_inputs.length
@@ -79,4 +87,19 @@ class OFAModelWarper(torch.nn.Module):
 
         patch_masks = torch.tensor([True] * len(src_tokens))
         sample = {"net_input": {"src_tokens": src_tokens, 'src_lengths': src_lengths, 'patch_images': patch_images, 'patch_masks': patch_masks}}
-        return self.generate_origin(sample, dtype=torch.float16, device='cuda')
+        return sample
+
+    def bin_check(self, image, text, prompt="is the object human want in the image? yes or no?"):
+        text = f" {prompt} #context: \"{text}\""
+        text_response = self.generate([text], [image])[0]
+        sample = self.make_sample([text], [image])
+        sample['net_input']['prev_output_tokens'] = sample['net_input']['src_tokens'][..., :1]
+        for k, v in sample['net_input'].items():
+            sample['net_input'][k] = v.to(device="cuda", dtype=torch.float16) if v.dtype == torch.float32 else v.to(device="cuda")
+        output = self.forward(**sample)
+        logits = output.logits
+
+        id_yes, id_no = self.tokenizer.convert_tokens_to_ids("Ġyes"), self.tokenizer.convert_tokens_to_ids("Ġno")
+        logits = logits[0, 0].view(59457)[[id_yes, id_no]]
+        prob = logits.softmax(dim=0)
+        return {"prob_yes": prob[0].item(), "raw_response": text_response}

@@ -34,8 +34,9 @@ def sbbox_to_bbox(sbbox, w=None, h=None, num_bins=1000, strict=False):
 
 def bbox_to_sbbox(bbox, w=None, h=None, num_bins=1000):
     """ This function converts a dense bounding box (bbox) to a string bounding box (sbbox). """
+    bbox = np.asarray(bbox).reshape(4)
     if w is not None and h is not None:
-        bbox = np.asarray(bbox).reshape(4) / np.asarray([w, h, w, h])
+        bbox /= np.asarray([w, h, w, h])
     bbox = np.clip(bbox, 1e-3, 1 - 1e-3)
     quant_x0 = "<bin_{}>".format(int((bbox[0] * (num_bins - 1)).round()))
     quant_y0 = "<bin_{}>".format(int((bbox[1] * (num_bins - 1)).round()))

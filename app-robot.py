@@ -116,6 +116,11 @@ def gradio_sam_api(image, bbox):
     return json.dumps(masks[0].astype(np.uint8).tolist())
 
 
+def gradio_bin_check(image, text, prompt):
+    result = model.bin_check(image, text, prompt)
+    return json.dumps(result)
+
+
 with gr.Blocks() as demo:
     gr.Markdown("""<h1 align="center">Demo of TiO</h1>""")
 
@@ -133,8 +138,12 @@ with gr.Blocks() as demo:
 
     upload_button.click(gradio_upload, [upload_file], [gr_image, gr_image_bbox, gr_text_input, gr_chatbot])
     gr_text_input.submit(gradio_chat, [gr_image, gr_text_input, gr_chatbot], [gr_image_bbox, gr_chatbot], 
-                         api_name="chat").then(lambda : None, [], [gr_text_input])
+                         api_name="origin_chat").then(lambda : None, [], [gr_text_input])
     gr_chat_button.click(gradio_predict, [gr_image, gr_text_input], [gr_text_input], api_name="single_chat")
+
+    # for bin_check
+    gr_bin_check = gr.Textbox(label='prompt', visible=False)
+    gr_bin_check.change(gradio_bin_check, [gr_image, gr_text_input, gr_bin_check], [gr_bin_check], api_name="bin_check")
 
     # for sam
     gr_bbox = gr.Textbox(label='bbox', visible=False)
@@ -151,7 +160,7 @@ if __name__ == "__main__":
 
     print('Initializing Chat')
     setup_seeds()
-    model = OFAModelWarper(args.ckpt)
+    model = OFAModelWarper(args.ckpt).eval().half().to(device="cuda")
     print('Initialization Finished')
 
     print(f"Run TiO server on 0.0.0.0:{args.port}")

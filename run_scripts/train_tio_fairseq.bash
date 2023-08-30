@@ -28,7 +28,7 @@ module_ofa=${work_dir}/attachments/OFA
 user_dir=${work_dir}/tio_core
 config_yaml=${work_dir}/config/training.yml
 bpe_dir=${module_ofa}/utils/BPE
-export PYTHONPATH=${module_ofa}/fairseq:$PYTHONPATH
+# export PYTHONPATH=${module_ofa}/fairseq:$PYTHONPATH
 cd ${work_dir}
 
 # ***** 修正OFA的一些bug *****
