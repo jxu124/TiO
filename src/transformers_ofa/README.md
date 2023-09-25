@@ -1,1 +1,0 @@
-The code in this folder comes from https://github.com/OFA-Sys/OFA, some of which is modified.
